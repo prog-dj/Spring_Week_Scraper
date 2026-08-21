@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#102a43" />
+  <title>Springboard | Spring week command centre</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-mark"><span class="brand-dot"></span><span>springboard</span></div>
+      <div class="sidebar-label">Workspace</div>
+      <nav class="main-nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="overview"><span class="nav-icon">◉</span>Overview</button>
+        <button class="nav-item" data-view="opportunities"><span class="nav-icon">✦</span>Find opportunities</button>
+        <button class="nav-item" data-view="applications"><span class="nav-icon">▣</span>Applications <span class="nav-count" id="nav-application-count">0</span></button>
+        <button class="nav-item" data-view="practice"><span class="nav-icon">◌</span>Practice studio</button>
+        <button class="nav-item" data-view="documents"><span class="nav-icon">▤</span>Documents</button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-note">
+        <div class="sidebar-note-icon">i</div>
+        <div><strong>Evidence first</strong><p>Acceptance data is only shown when a firm publishes it.</p></div>
+      </div>
+      <button class="profile-chip" id="profile-button"><span class="avatar">AM</span><span><strong>Alex Morgan</strong><small>Candidate profile</small></span><span class="chevron">⌄</span></button>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="breadcrumb"><span>Workspace</span><span class="slash">/</span><strong id="page-breadcrumb">Overview</strong></div>
+        <div class="topbar-actions">
+          <button class="icon-button" id="notification-button" aria-label="View notifications" title="Notifications"><span class="notification-dot"></span>♧</button>
+          <button class="help-button" id="help-button">Need help?</button>
+        </div>
+      </header>
+
+      <section class="view active" id="overview-view">
+        <div class="page-intro intro-overview">
+          <div><div class="eyebrow">THURSDAY, 21 AUGUST 2026</div><h1>Your next move, Alex.</h1><p>Keep the search focused. You have three applications that need attention this week.</p></div>
+          <button class="primary-button" data-view-target="opportunities"><span>+</span> Add opportunity</button>
+        </div>
+        <div class="stat-grid">
+          <article class="stat-card accent-coral"><span class="stat-label">Saved opportunities</span><strong id="saved-opportunities-stat">0</strong><span class="stat-meta">Across 5 career paths</span></article>
+          <article class="stat-card accent-teal"><span class="stat-label">In progress</span><strong id="in-progress-stat">0</strong><span class="stat-meta">Keep your momentum</span></article>
+          <article class="stat-card accent-yellow"><span class="stat-label">Closing soon</span><strong id="closing-soon-stat">0</strong><span class="stat-meta">Next 14 days</span></article>
+          <article class="stat-card accent-blue"><span class="stat-label">Practice streak</span><strong>4 <small>days</small></strong><span class="stat-meta">Best: 12 days</span></article>
+        </div>
+        <div class="dashboard-grid">
+          <section class="panel timeline-panel">
+            <div class="panel-heading"><div><span class="section-kicker">YOUR PIPELINE</span><h2>Application timeline</h2></div><button class="text-button" data-view-target="applications">View all <span>→</span></button></div>
+            <div class="timeline" id="timeline-list"></div>
+          </section>
+          <section class="panel focus-panel">
+            <div class="panel-heading"><div><span class="section-kicker">TODAY'S FOCUS</span><h2>Make it count</h2></div><span class="focus-mark">✳</span></div>
+            <div class="focus-feature"><span class="focus-number">01</span><div><h3>Finish your Barclays video OA</h3><p>Estimated time: 35 min · Due tomorrow</p></div><button class="round-arrow" data-view-target="practice" aria-label="Open practice studio">→</button></div>
+            <div class="focus-feature"><span class="focus-number">02</span><div><h3>Polish your motivation answer</h3><p>For <strong>Goldman Sachs</strong> · 68% complete</p></div><button class="round-arrow" data-view-target="applications" aria-label="Open applications">→</button></div>
+            <div class="focus-footer"><span class="mini-avatar">AM</span><span>You're on track for your weekly goal</span><strong>4/5</strong></div>
+          </section>
+        </div>
+        <section class="panel recommended-panel"><div class="panel-heading"><div><span class="section-kicker">MATCHED FOR YOU</span><h2>Fresh opportunities</h2></div><button class="text-button" data-view-target="opportunities">Browse all <span>→</span></button></div><div class="opportunity-row" id="recommended-list"></div></section>
+      </section>
+
+      <section class="view" id="opportunities-view">
+        <div class="page-intro"><div><div class="eyebrow">DISCOVERY</div><h1>Find your spring week.</h1><p>Curated opportunities with the details that matter. Every fact has a source.</p></div><button class="secondary-button" id="refresh-button">↻ Refresh data</button></div>
+        <div class="filter-toolbar"><label class="search-field"><span>⌕</span><input id="opportunity-search" type="search" placeholder="Search firms, sectors or cities" /></label><select id="sector-filter"><option value="all">All sectors</option><option value="Investment Banking">Investment banking</option><option value="Asset Management">Asset management</option><option value="Consulting">Consulting</option><option value="Technology">Technology</option><option value="Law">Law</option></select><select id="status-filter"><option value="all">Any status</option><option value="open">Open now</option><option value="soon">Closing soon</option><option value="saved">Saved by me</option></select></div>
+        <div class="source-note" id="source-note"><span>…</span> Checking official career pages…</div>
+        <div class="opportunity-grid" id="opportunity-grid"></div>
+      </section>
+
+      <section class="view" id="applications-view">
+        <div class="page-intro"><div><div class="eyebrow">YOUR APPLICATIONS</div><h1>Make every one count.</h1><p>A clear next action for every application, all in one place.</p></div><button class="primary-button" data-view-target="opportunities"><span>+</span> Add from search</button></div>
+        <div class="application-board" id="application-board"></div>
+      </section>
+
+      <section class="view" id="practice-view">
+        <div class="page-intro"><div><div class="eyebrow">PRACTICE STUDIO</div><h1>Rehearse the real thing.</h1><p>Short, focused drills for OAs, interviews, and the written parts of your application.</p></div><div class="streak-pill"><span>✦</span> 4 day streak</div></div>
+        <div class="practice-layout"><div class="practice-main"><div class="practice-tabs"><button class="practice-tab active" data-practice="oa">OA drills</button><button class="practice-tab" data-practice="interview">Interview bank</button><button class="practice-tab" data-practice="cover">Cover letter lab</button></div><div id="practice-content"></div></div><aside class="panel practice-sidebar"><span class="section-kicker">WEEKLY TARGET</span><h2>5 sessions</h2><div class="progress-track"><span style="width: 80%"></span></div><div class="target-row"><span>4 completed</span><strong>80%</strong></div><hr/><span class="section-kicker">RECENT WINS</span><div class="win-item"><span class="win-icon teal">✓</span><span>Numerical reasoning<br/><small>92% score</small></span></div><div class="win-item"><span class="win-icon coral">✓</span><span>Why investment banking?<br/><small>Saved answer</small></span></div></aside></div>
+      </section>
+
+      <section class="view" id="documents-view">
+        <div class="page-intro"><div><div class="eyebrow">DOCUMENT VAULT</div><h1>Everything application-ready.</h1><p>Store your core materials once, then tailor them with intention.</p></div><button class="primary-button" id="add-document-button"><span>+</span> Add document</button></div>
+        <div class="document-layout"><section class="panel documents-panel"><div class="panel-heading"><div><span class="section-kicker">YOUR LIBRARY</span><h2>Saved materials</h2></div><span class="document-count" id="document-count">0 files</span></div><div id="document-list"></div></section><aside class="panel profile-panel"><span class="section-kicker">CANDIDATE PROFILE</span><h2>Alex Morgan</h2><p class="profile-subtitle">University of Bristol · Economics · 2027</p><div class="profile-progress"><div class="profile-progress-label"><span>Profile completeness</span><strong>72%</strong></div><div class="progress-track"><span style="width: 72%"></span></div></div><div class="profile-detail"><span>Preferred sectors</span><strong>Banking, consulting</strong></div><div class="profile-detail"><span>Target locations</span><strong>London · Edinburgh</strong></div><button class="secondary-button full-width" id="edit-profile-button">Edit profile</button></aside></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <div class="modal-backdrop" id="modal-backdrop" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close" id="modal-close" aria-label="Close">×</button><div id="modal-content"></div></div></div>
+  <script src="app.js"></script>
+</body>
+</html>
