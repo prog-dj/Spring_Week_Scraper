@@ -1,0 +1,32 @@
+name = "springr"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Serves static/ (the existing frontend, unchanged) alongside the Worker's API
+# routes -- Workers Static Assets, not a separate Pages project.
+[assets]
+directory = "../static"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "springr"
+database_id = "b47083b4-f404-443b-bfbc-511dc8d49f9e"
+
+[[r2_buckets]]
+binding = "DOCUMENTS"
+bucket_name = "springr-documents"
+
+# Secrets (set via `wrangler secret put <NAME>`, never committed):
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET, ADMIN_EMAILS,
+#   INGEST_SHARED_SECRET (the token GitHub Actions uses to push scraped results)
+#   ENVIRONMENT ("production" once deployed -- makes session cookies Secure)
+#   SENTRY_DSN, GITHUB_TOKEN, GITHUB_REPO (all optional)
+#
+# ENVIRONMENT is a secret, not a [vars] entry -- `wrangler deploy` overwrites
+# a secret with any [vars] entry of the same name on every deploy, which
+# would silently flip cookies back to non-Secure each time. Local `wrangler
+# dev` just gets `undefined` for it, which the app already treats as
+# non-production (see worker/src/auth/session.ts).

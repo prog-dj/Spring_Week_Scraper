@@ -39,14 +39,6 @@ let toastTimer;
 const $ = (selector, parent = document) => parent.querySelector(selector);
 const $$ = (selector, parent = document) => [...parent.querySelectorAll(selector)];
 
-function saveLocalFile(id, file) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('springr-files', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('files');
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => { const transaction = request.result.transaction('files', 'readwrite'); transaction.objectStore('files').put(file, id); transaction.oncomplete = resolve; transaction.onerror = () => reject(transaction.error); };
-  });
-}
 const showToast = (message) => {
   const toast = $('#toast');
   toast.textContent = message;
@@ -232,7 +224,7 @@ function renderApplications() {
 
 function renderDocuments() {
   $('#document-count').textContent = `${state.documents.length} files`;
-  $('#document-list').innerHTML = state.documents.length ? state.documents.map((document) => `<div class="document-row"><span class="document-icon">${document.doc_type}</span><div class="document-name"><strong>${document.name}</strong><span>${document.size_bytes ? `${Math.ceil(document.size_bytes / 1024)} KB` : 'Local file'} · Added ${new Date(document.created_at).toLocaleDateString()}</span></div><span class="document-status">${document.status || 'Stored'}</span><button class="document-menu" data-document="${document.id}" aria-label="Document actions">···</button></div>`).join('') : '<p class="empty-state">No documents yet. Add your CV or cover letter to get started.</p>';
+  $('#document-list').innerHTML = state.documents.length ? state.documents.map((document) => `<div class="document-row"><span class="document-icon">${document.doc_type}</span><div class="document-name"><strong>${document.name}</strong><span>${document.size_bytes ? `${Math.ceil(document.size_bytes / 1024)} KB` : ''} · Added ${new Date(document.created_at).toLocaleDateString()}</span></div><span class="document-status">${document.status || 'Stored'}</span><a class="document-menu" href="/api/documents/${document.id}/download" aria-label="Download document">↓</a><button class="document-menu" data-document-delete="${document.id}" aria-label="Delete document">✕</button></div>`).join('') : '<p class="empty-state">No documents yet. Add your CV or cover letter to get started.</p>';
 }
 
 function openModal(content) { $('#modal-content').innerHTML = content; $('#modal-backdrop').hidden = false; }
@@ -340,11 +332,11 @@ function bindEvents() {
   $('#logout-button').addEventListener('click', () => { window.location.href = '/auth/logout'; });
   $('#add-document-button').addEventListener('click', () => {
     if (!requireLogin('Sign in to store documents.')) return;
-    openModal('<span class="eyebrow">DOCUMENT VAULT</span><h2>Add a document</h2><p>Files are kept in this browser only; only the name/type are saved to your account.</p><form class="modal-form" id="document-form"><label>File<label class="upload-dropzone" id="upload-dropzone" for="document-file"><input id="document-file" name="file" type="file" accept=".pdf,.doc,.docx,.txt" required hidden /><span class="upload-icon">⇧</span><span class="upload-text" id="upload-text"><strong>Click to choose a file</strong><small>or drag it here · PDF, DOCX, or TXT</small></span></label></label><label>Document name<input name="name" placeholder="e.g. Consulting CV" required /></label><label>Type<select name="type"><option>PDF</option><option>DOCX</option><option>TXT</option></select></label><button class="primary-button full-width">Add document <span>→</span></button></form>');
+    openModal('<span class="eyebrow">DOCUMENT VAULT</span><h2>Add a document</h2><p>Files are uploaded and stored securely on your account (max 10MB).</p><form class="modal-form" id="document-form"><label>File<label class="upload-dropzone" id="upload-dropzone" for="document-file"><input id="document-file" name="file" type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" required hidden /><span class="upload-icon">⇧</span><span class="upload-text" id="upload-text"><strong>Click to choose a file</strong><small>or drag it here · PDF, DOC, or DOCX</small></span></label></label><label>Document name<input name="name" placeholder="e.g. Consulting CV" required /></label><label>Type<select name="doc_type"><option>PDF</option><option>DOCX</option><option>DOC</option></select></label><button class="primary-button full-width">Add document <span>→</span></button></form>');
     const dropzone = $('#upload-dropzone');
     const fileInput = $('#document-file');
     const uploadText = $('#upload-text');
-    const showFile = (file) => { uploadText.innerHTML = file ? `<strong>${file.name}</strong><small>${file.size ? `${Math.ceil(file.size / 1024)} KB` : ''} · Click to change</small>` : '<strong>Click to choose a file</strong><small>or drag it here · PDF, DOCX, or TXT</small>'; };
+    const showFile = (file) => { uploadText.innerHTML = file ? `<strong>${file.name}</strong><small>${file.size ? `${Math.ceil(file.size / 1024)} KB` : ''} · Click to change</small>` : '<strong>Click to choose a file</strong><small>or drag it here · PDF, DOC, or DOCX</small>'; };
     fileInput.addEventListener('change', () => showFile(fileInput.files[0]));
     dropzone.addEventListener('dragover', (event) => { event.preventDefault(); dropzone.classList.add('drag-over'); });
     dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
@@ -358,23 +350,32 @@ function bindEvents() {
     const save = event.target.closest('[data-save]'); if (save) toggleSaved(save.dataset.save);
     const apply = event.target.closest('[data-apply]'); if (apply) openOpportunity(apply.dataset.apply);
     const cycle = event.target.closest('[data-cycle]'); if (cycle) cycleApplication(cycle.dataset.cycle);
-    const doc = event.target.closest('[data-document]'); if (doc) showToast('Document actions are ready when file uploads are connected');
+    const deleteDoc = event.target.closest('[data-document-delete]');
+    if (deleteDoc) {
+      const id = deleteDoc.dataset.documentDelete;
+      fetch(`/api/documents/${id}`, { method: 'DELETE' }).then((response) => {
+        if (!response.ok) throw new Error('delete failed');
+        state.documents = state.documents.filter((document) => String(document.id) !== String(id));
+        renderDocuments();
+        showToast('Document deleted');
+      }).catch(() => showToast('Could not delete this document'));
+    }
   });
   $('#modal-close').addEventListener('click', closeModal); $('#modal-backdrop').addEventListener('click', (event) => { if (event.target.id === 'modal-backdrop') closeModal(); });
   document.addEventListener('submit', async (event) => {
     if (event.target.id === 'document-form') {
       event.preventDefault();
       const form = new FormData(event.target);
-      const file = form.get('file');
-      const localId = `doc-${Date.now()}`;
       try {
-        await saveLocalFile(localId, file);
-        const response = await fetch('/api/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.get('name') || file.name, doc_type: form.get('type'), size_bytes: file.size || null, status: 'Stored locally' }) });
-        if (!response.ok) throw new Error('save failed');
+        const response = await fetch('/api/documents', { method: 'POST', body: form });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || 'save failed');
+        }
         const payload = await response.json();
         state.documents.unshift(payload.document);
-        closeModal(); renderDocuments(); showToast('Document stored privately on this device');
-      } catch (error) { showToast('This document could not be saved'); }
+        closeModal(); renderDocuments(); showToast('Document uploaded');
+      } catch (error) { showToast(error.message || 'This document could not be saved'); }
     }
   });
   document.addEventListener('click', (event) => { if (event.target.id === 'help-close') closeModal(); });

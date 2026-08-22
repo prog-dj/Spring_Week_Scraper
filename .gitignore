@@ -4,3 +4,6 @@ __pycache__/
 springr.db
 .env
 *.log
+node_modules/
+.wrangler/
+worker/.dev.vars

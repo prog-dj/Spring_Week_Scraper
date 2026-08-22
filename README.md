@@ -7,47 +7,66 @@ students track applications and documents against them.
 
 ## Run locally
 
+The app is a Cloudflare Worker now (Hono + D1 + R2), not a Flask server. See
+[DEPLOY.md](DEPLOY.md) for full setup; the short version:
+
+```powershell
+cd worker
+npm install
+npm run dev
+```
+
+Open <http://127.0.0.1:8787>. You'll land on a sign-in screen — see
+[DEPLOY.md](DEPLOY.md) for what you need before Google login actually works
+(a Google OAuth client, D1/R2 resources, and Worker secrets).
+
+To test the scraper against a local dev server:
+
 ```powershell
 pip install -r requirements.txt
 python -m playwright install chromium
-python app.py
+python -m scraping.push_adapter
 ```
-
-Open <http://127.0.0.1:4173>. You'll land on a sign-in screen — see **Configuration**
-below for what you need before Google login actually works.
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in:
-
-- `SERPER_API_KEY` — for search-based discovery (optional; direct employer-page
-  crawling from `sources.json` works without it).
-- `FLASK_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ADMIN_EMAILS` —
-  required for login. See [DEPLOY.md](DEPLOY.md) for exactly how to obtain these.
-
-`SPRINGR_REFRESH_HOURS` controls the background discovery refresh interval.
+Almost all configuration is Cloudflare Worker secrets (`wrangler secret put`),
+not a `.env` file — see [DEPLOY.md](DEPLOY.md) for the full list and how to
+obtain each one (Google OAuth client, session secret, admin emails, ingest
+secret, optional Sentry DSN). `.env.example` covers only the handful of
+variables needed to run the Python scraper locally.
 
 ## Architecture
 
-- `app.py` / `config.py` — Flask application factory and configuration.
-- `auth/` — Google OAuth 2.0 login (Authlib: PKCE, CSRF state, ID-token
-  verification) and the `@login_required`/`@admin_required` decorators.
+- `worker/` — the Cloudflare Worker (Hono, TypeScript). Serves the API, the
+  static frontend, and owns all persistence (D1) and file storage (R2).
+  - `src/auth/` — Google OAuth 2.0 login (manually implemented PKCE + CSRF
+    state + ID-token verification via `jose`, since Authlib doesn't exist for
+    Workers) and the session-cookie / `requireAuth`/`requireAdmin` middleware.
+  - `src/db/` — one module per table, the only code that touches D1 SQL.
+  - `src/routes/` — Hono route handlers: `api.ts` is public/read-only;
+    `workspace.ts`/`applications.ts`/`documents.ts`/`saved.ts` are per-user
+    (require login); `admin.ts` (manually triggering a scrape) requires admin;
+    `ingest.ts` is the protected endpoint GitHub Actions pushes scrape results to.
+  - `src/storage/` — file-upload validation (magic-byte sniffing, size caps)
+    and the D1-backed rate limiter.
 - `scraping/` — the discovery/extraction engine (Serper search, seed-employer
   crawling, Playwright rendering, deadline/eligibility/format extraction,
-  multi-programme page splitting). No Flask or DB dependency — pure scraping logic.
-- `models/` — all database access, behind a small function-per-operation API so
-  routes and scraping code never touch SQL directly.
-- `api/` — Flask blueprints. `routes.py` is public/read-only;
-  `workspace_routes.py`/`applications_routes.py`/`documents_routes.py`/
-  `saved_routes.py` are per-user and require login; `admin_routes.py` (the
-  discovery-trigger endpoints) requires admin.
-- `static/` — the frontend (vanilla HTML/JS/CSS, no build step).
+  multi-programme page splitting). No web-framework or DB dependency — pure
+  scraping logic, run by GitHub Actions rather than an always-on server.
+  `push_adapter.py` is the GitHub Actions entry point: runs the same
+  discovery/verification functions, then POSTs the results to the Worker's
+  `/internal/ingest` endpoint instead of writing to a local database.
+- `static/` — the frontend (vanilla HTML/JS/CSS, no build step), served
+  directly by the Worker via Workers Static Assets.
+- `.github/workflows/scrape.yml` — runs the scraper on a schedule (every 6
+  hours) using a real Ubuntu runner + Chromium, since Cloudflare Workers can't
+  run Playwright or long-lived processes.
 
-The `/api/discover` and `/api/opportunities/refresh` endpoints are admin-only —
-each run costs real Serper API spend and spins up Playwright against many employer
-sites, so they must never be publicly triggerable. The background scheduler thread
-calls the same discovery function directly in-process on a timer and doesn't go
-through those HTTP endpoints at all.
+The manual-trigger admin endpoints (`GET /api/discover`,
+`GET /api/opportunities/refresh`) don't run the scraper themselves anymore —
+they just dispatch the GitHub Actions workflow early, admin-only, since each
+run still costs real Serper API spend.
 
 ## Discovery
 
@@ -88,7 +107,7 @@ duplicate/noisy entries.
 
 ## Data provenance
 
-Every discovered opportunity is stored in SQLite with its source URL, discovery
+Every discovered opportunity is stored in D1 with its source URL, discovery
 provider, HTTP status, evidence text, confidence, checked timestamp, and extraction
 error. Status transitions are stored in `status_history`; refresh attempts are
 stored in `discovery_runs`.
@@ -103,11 +122,11 @@ fabricated placeholder when it isn't stated.
 Login is Google OAuth only (see [DEPLOY.md](DEPLOY.md) to set up your own OAuth
 client — it's free). The scraped `opportunities` catalog is global/shared; saved
 opportunities, tracked applications, document metadata, and per-opportunity
-workspaces are all scoped to the signed-in user. Uploaded document *files* stay in
-the browser's IndexedDB per-device — only their metadata (name, type, size) syncs to
-the account.
+workspaces are all scoped to the signed-in user. Uploaded document files are
+stored server-side in Cloudflare R2 (validated by magic-byte sniffing, size-capped
+at 10MB) — real multi-device access, not per-browser storage.
 
 ## Deploying
 
-See [DEPLOY.md](DEPLOY.md) for the full walkthrough (Google OAuth client setup,
-environment variables, Docker build, hosting recommendations).
+See [DEPLOY.md](DEPLOY.md) for the full walkthrough (Cloudflare account setup,
+D1/R2 provisioning, Google OAuth client, Worker secrets, GitHub Actions secrets).

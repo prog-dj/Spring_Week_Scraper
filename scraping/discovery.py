@@ -1,27 +1,18 @@
-"""Candidate discovery (Serper search + seed-employer crawling), verification, and
-the top-level discover_and_refresh/scheduler entrypoints."""
+"""Candidate discovery (Serper search + seed-employer crawling) and verification.
+Persistence is not this module's concern -- scraping.push_adapter runs these
+functions on a GitHub Actions schedule and POSTs the results to the Cloudflare
+Worker's /internal/ingest endpoint, which writes to D1."""
 from __future__ import annotations
 
 import json
-import os
 import re
-import threading
-import time
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
-from models.opportunities import (
-    cleanup_stale_opportunities,
-    purge_expired_opportunities,
-    record_discovery_error,
-    record_discovery_run,
-    record_seed_failures,
-    upsert_opportunity,
-    utc_now,
-)
 from scraping.constants import (
     DEADLINE_TRIGGERS,
     EXCLUDED_DOMAINS,
@@ -63,7 +54,8 @@ from scraping.playwright_render import (
     sync_playwright,
 )
 
-refresh_lock = threading.Lock()
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def _host_matches(host: str, domains: tuple[str, ...]) -> bool:
@@ -391,37 +383,7 @@ def dedupe_opportunities(items: list[dict]) -> list[dict]:
     return list(best.values())
 
 
-def discover_and_refresh() -> dict:
-    if not refresh_lock.acquire(blocking=False):
-        return {"status": "already_running"}
-    started = utc_now()
-    try:
-        candidates_by_url: dict[str, dict] = {}
-        if serper_api_key():
-            candidates_by_url = {c["url"]: c for c in search_serper()}
-        seed_count = len(load_seed_employers())
-        seed_candidates, seed_failures = search_seed_employers()
-        for candidate in seed_candidates:
-            candidates_by_url.setdefault(candidate["url"], candidate)
-        candidates = list(candidates_by_url.values())
-        verified = dedupe_opportunities(verify_candidates(candidates))
-        for item in verified:
-            upsert_opportunity(item)
-        cleanup_stale_opportunities([item["id"] for item in verified])
-        purged = purge_expired_opportunities()
-        record_discovery_run(started, utc_now(), len(SEARCH_QUERIES) + seed_count, len(candidates), len(verified))
-        record_seed_failures(seed_failures)
-        return {"status": "complete", "candidates": len(candidates), "verified": len(verified), "seedFailures": len(seed_failures), "expiredPurged": purged, "checkedAt": utc_now()}
-    except Exception as error:
-        record_discovery_error(started, utc_now(), len(SEARCH_QUERIES), str(error))
-        return {"status": "error", "error": str(error), "checkedAt": utc_now()}
-    finally:
-        refresh_lock.release()
-
-
-def scheduler() -> None:
-    refresh_hours = float(os.getenv("SPRINGR_REFRESH_HOURS", "6"))
-    while True:
-        if serper_api_key() or SOURCES_PATH.exists():
-            discover_and_refresh()
-        time.sleep(max(300, refresh_hours * 3600))
+# The old in-process discover_and_refresh()/scheduler() pair is gone -- that
+# orchestration now lives in scraping.push_adapter.run(), triggered by GitHub
+# Actions' cron instead of an always-on background thread, since Workers can't
+# run either Playwright or a long-lived thread.
