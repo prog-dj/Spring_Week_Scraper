@@ -151,6 +151,8 @@ async function toggleSaved(opportunityId) {
 function navigate(viewName) {
   $$('.view').forEach((view) => view.classList.toggle('active', view.id === `${viewName}-view`));
   $$('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === viewName));
+  const mobileNavSelect = $('#mobile-nav-select');
+  if (mobileNavSelect) mobileNavSelect.value = viewName;
   const label = ({ overview: 'Overview', opportunities: 'Find opportunities', applications: 'Applications', practice: 'Practice studio', documents: 'Documents' })[viewName];
   $('#page-breadcrumb').textContent = label;
   if (viewName === 'opportunities') renderOpportunities();
@@ -325,6 +327,7 @@ async function cycleApplication(opportunityId) {
 function bindEvents() {
   $$('.nav-item').forEach((item) => item.addEventListener('click', () => navigate(item.dataset.view)));
   $$('[data-view-target]').forEach((item) => item.addEventListener('click', () => navigate(item.dataset.viewTarget)));
+  $('#mobile-nav-select').addEventListener('change', (event) => navigate(event.target.value));
   $('#opportunity-search').addEventListener('input', renderOpportunities); $('#sector-filter').addEventListener('change', renderOpportunities); $('#status-filter').addEventListener('change', renderOpportunities);
   $('#refresh-button').addEventListener('click', async () => { $('#refresh-button').textContent = 'Checking…'; await loadOpportunities(true); $('#refresh-button').textContent = '✓ Up to date'; setTimeout(() => { $('#refresh-button').textContent = '↻ Refresh data'; }, 2200); });
   $('#help-button').addEventListener('click', () => openModal('<span class="eyebrow">QUICK HELP</span><h2>How Springr keeps you moving</h2><p>Use Find opportunities to build your shortlist, Applications to track the next action, and Documents to keep your materials ready.</p><button class="primary-button full-width" id="help-close">Got it</button>'));
