@@ -25,10 +25,10 @@ PORT = int(os.getenv("SPRINGBOARD_PORT", "4173"))
 REFRESH_HOURS = float(os.getenv("SPRINGBOARD_REFRESH_HOURS", "6"))
 SERPER_URL = "https://google.serper.dev/search"
 SEARCH_QUERIES = [
-    'UK "spring week" applications',
-    'UK "spring insight" programme applications',
-    'UK "insight week" students applications',
-    'UK "first year" "insight programme" applications',
+    "UK spring week applications",
+    "UK spring insight programme applications",
+    "UK insight week students applications",
+    "UK first year insight programme applications",
 ]
 USER_AGENT = "SpringboardOpportunityResearch/2.0 (+local student careers tool)"
 REQUEST_TIMEOUT = 15
@@ -96,7 +96,9 @@ def clean_text(html: str) -> str:
 def is_opportunity_candidate(result: dict) -> bool:
     haystack = f"{result.get('title', '')} {result.get('snippet', '')}".lower()
     terms = ("spring week", "spring insight", "insight week", "insight programme", "insight program", "first year programme", "first-year programme")
-    return any(term in haystack for term in terms)
+    excluded = ("reddit.com", "targetjobs.co.uk", "brightnetwork.co.uk", "tracker", "calendar", "guide", "what is", "how do you get", "complete guide", "free resources")
+    link = result.get("link", "").lower()
+    return any(term in haystack for term in terms) and not any(term in f"{link} {haystack}" for term in excluded)
 
 
 def search_serper() -> list[dict]:
@@ -106,7 +108,9 @@ def search_serper() -> list[dict]:
     candidates: dict[str, dict] = {}
     for query in SEARCH_QUERIES:
         response = requests.post(SERPER_URL, headers={"X-API-KEY": api_key, "Content-Type": "application/json"}, json={"q": query, "gl": "uk", "hl": "en", "num": 20}, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
+        if not response.ok:
+            detail = response.text[:500].replace("\n", " ")
+            raise RuntimeError(f"Serper HTTP {response.status_code}: {detail}")
         for result in response.json().get("organic", []):
             url = canonical_url(result.get("link", ""))
             if url and is_opportunity_candidate(result):
@@ -207,15 +211,19 @@ def verify_candidate(candidate: dict) -> dict:
     try:
         response = requests.get(candidate["url"], headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
         base["http_status"] = response.status_code
-        text = clean_text(response.text)
+        text = clean_text(response.text) if response.status_code < 400 else ""
+        rendered_text = None
         if response.status_code >= 400 or len(text) < 300:
-            text = render_with_playwright(candidate["url"]) or text
+            rendered_text = render_with_playwright(candidate["url"])
+            text = rendered_text or ""
         if len(text) < 100:
             raise RuntimeError(f"verification returned too little page text (HTTP {response.status_code})")
         deadline = extract_deadline(text)
         programme_dates = extract_programme_dates(text)
         status, evidence, confidence = classify_status(text, deadline, programme_dates)
         base.update({"company": extract_company(candidate.get("title", ""), candidate["url"]), "programme": extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": infer_sector(f"{candidate.get('title', '')} {text}"), "location": infer_location(text), "deadline": deadline, "programme_dates": programme_dates, "status": status, "confidence": confidence, "evidence": evidence, "acceptance_rate": extract_acceptance_rate(text), "perks": extract_perks(text), "logo": extract_company(candidate.get("title", ""), candidate["url"])[:3].upper(), "logo_class": sector_logo_class(infer_sector(candidate.get("title", "")))})
+        if response.status_code >= 400 and rendered_text is None:
+            base.update({"status": "unknown", "confidence": "low", "evidence": f"Source returned HTTP {response.status_code}; page could not be verified"})
     except Exception as error:
         base["last_error"] = str(error)
     return base
