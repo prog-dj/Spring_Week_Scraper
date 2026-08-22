@@ -33,6 +33,7 @@
       <button class="profile-chip" id="profile-button" hidden><span class="avatar" id="profile-avatar">?</span><span><strong id="profile-name">Candidate</strong><small id="profile-email"></small></span><span class="chevron">⌄</span></button>
       <button class="profile-chip" id="logout-button" style="margin-top:6px" hidden><span>Sign out</span></button>
       <a class="primary-button full-width" id="signin-link" href="/auth/login"><span>→</span> Sign in with Google</a>
+      <a class="sidebar-privacy-link" href="/privacy.html">Privacy policy</a>
     </aside>
 
     <main class="main-content">
@@ -130,13 +131,14 @@
       <section class="view" id="documents-view">
         <div class="page-intro"><div><div class="eyebrow">DOCUMENT VAULT</div><h1>Everything application-ready.</h1><p>Store your core materials once, then tailor them with intention.</p></div><button class="primary-button" id="add-document-button"><span>+</span> Add document</button></div>
         <div class="locked-panel" id="documents-locked" hidden><h2>Sign in to store documents.</h2><p>Document storage is tied to your account so your materials are there whenever you sign back in.</p><a class="primary-button" href="/auth/login">Sign in with Google <span>→</span></a></div>
-        <div class="document-layout" id="documents-layout"><section class="panel documents-panel"><div class="panel-heading"><div><span class="section-kicker">YOUR LIBRARY</span><h2>Saved materials</h2></div><span class="document-count" id="document-count">0 files</span></div><div id="document-list"></div></section><aside class="panel profile-panel"><span class="section-kicker">CANDIDATE PROFILE</span><h2 id="profile-panel-name">Candidate</h2><p class="profile-subtitle" id="profile-panel-email"></p></aside></div>
+        <div class="document-layout" id="documents-layout"><section class="panel documents-panel"><div class="panel-heading"><div><span class="section-kicker">YOUR LIBRARY</span><h2>Saved materials</h2></div><span class="document-count" id="document-count">0 files</span></div><div id="document-list"></div></section><aside class="panel profile-panel"><span class="section-kicker">CANDIDATE PROFILE</span><h2 id="profile-panel-name">Candidate</h2><p class="profile-subtitle" id="profile-panel-email"></p><div class="account-actions"><button class="secondary-button" id="export-data-button">Download my data</button><button class="secondary-button danger" id="delete-account-button">Delete my account</button><a class="text-button" href="/privacy.html">Privacy policy</a></div></aside></div>
       </section>
     </main>
   </div>
 
   <div class="toast" id="toast" role="status"></div>
   <div class="modal-backdrop" id="modal-backdrop" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close" id="modal-close" aria-label="Close">×</button><div id="modal-content"></div></div></div>
+  <div class="cookie-banner" id="cookie-banner" hidden role="status"><p>We use only strictly necessary cookies (to keep you signed in) -- no tracking or advertising cookies. <a href="/privacy.html">Read our privacy policy</a>.</p><div class="cookie-banner-actions"><button class="primary-button" id="cookie-ack-button">Got it</button></div></div>
   <script src="app.js"></script>
 </body>
 </html>

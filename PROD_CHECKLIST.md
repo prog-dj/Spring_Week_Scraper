@@ -42,18 +42,38 @@ Cloudflare Workers + D1 + R2 + GitHub Actions architecture.
   secrets are set via `wrangler secret put`; GitHub Actions secrets via repo
   settings; `.env`/`.env.example` only ever holds the local-scraper-testing
   values, and `.env` itself is gitignored.
+- **Privacy policy** — `static/privacy.html` (linked from the sidebar and the
+  cookie notice) covers what's collected, why, cookies used, where data is
+  stored, and how to exercise GDPR rights. The "Contact" section is a
+  placeholder — add a real contact address before onboarding people outside
+  your trusted circle; GDPR requires a genuine channel for data-subject requests.
+- **Cookie notice** — a dismissible banner (`static/app.js` `initCookieBanner`)
+  discloses the two cookies in use (`springr_session`, `springr_oauth_state`),
+  both strictly necessary (session + CSRF), so no consent gate is legally
+  required under PECR/GDPR — this is a notice, not a consent wall. No
+  analytics/advertising cookies exist to gate in the first place.
+- **GDPR data export & account deletion** — `GET /api/account/export` (JSON
+  download of everything an account has stored) and `DELETE /api/account`
+  (permanently deletes the account, its D1 rows, and its R2 files) are wired
+  up in the Documents page's profile panel ("Download my data" / "Delete my
+  account").
+- **Opportunities list gated behind sign-in** — `GET /api/opportunities`
+  returns only a 3-item preview plus a total count to signed-out requests;
+  the full catalog requires a session. Enforced server-side
+  (`worker/src/routes/api.ts`), not just hidden in the UI — nothing beyond the
+  preview is ever sent to a signed-out browser.
 
 ## Still worth doing before real users show up
 
-- **Content-Security-Policy tightening** — the current CSP allows
-  `style-src 'unsafe-inline'` because `static/styles.css`'s companion inline
-  styles (if any) and `static/app.js`'s DOM writes weren't audited line-by-line
-  for inline `style=` usage. Worth a pass to remove `unsafe-inline` and switch
-  to nonces/hashes if the frontend doesn't actually need it.
+- **Content-Security-Policy tightening** — `style-src` still needs
+  `'unsafe-inline'` because `static/app.js`'s DOM writes weren't audited
+  line-by-line for inline `style=` usage. Worth a pass to remove
+  `unsafe-inline` and switch to nonces/hashes if the frontend doesn't
+  actually need it.
 - **Structured request logging** — Sentry catches errors, but there's no
   access-log/audit-log equivalent (who uploaded what, who was denied access to
-  what document) — add if you need an audit trail, e.g. for GDPR-style data
-  requests.
+  what document) — add if you need an audit trail beyond what the GDPR export
+  endpoint already covers.
 - **Backups** — D1 has point-in-time recovery on paid plans only; on the free
   tier, consider a periodic `wrangler d1 export` to somewhere durable (even a
   second R2 bucket) if the opportunity/user data ever becomes hard to
@@ -62,13 +82,7 @@ Cloudflare Workers + D1 + R2 + GitHub Actions architecture.
 - **R2 lifecycle** — no automatic cleanup of orphaned R2 objects (e.g. if a
   D1 write fails after an R2 upload succeeds). Low risk at small scale; worth
   a periodic reconciliation job if storage usage becomes worth tracking.
-- **Terms of service / privacy policy** — you're now storing real users' CVs
-  and personal documents. Even a minimal privacy notice (what's collected, how
-  long it's kept, who can see it) is worth having before onboarding people who
-  aren't you.
-- **GDPR-style account deletion** — there's no "delete my account and all my
-  data" endpoint yet. Worth adding if users outside a trusted circle sign up —
-  right now an admin would have to do it manually via `wrangler d1 execute`.
+- **Privacy policy contact address** — see above; currently a placeholder.
 - **Load-test the rate limiter** — the D1-backed limiter is fine at low
   traffic but every check is a D1 round-trip; if usage grows into the
   thousands of requests/minute range, moving to a Durable Object or Cloudflare's

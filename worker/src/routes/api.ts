@@ -30,9 +30,24 @@ apiRoutes.get("/session", (c) => {
   });
 });
 
+// The full catalog is a sign-in perk -- signed-out visitors get a small
+// preview plus a total count, not the whole list. Enforced server-side (not
+// just hidden in the UI) since anything sent to the browser is visible
+// regardless of CSS.
+const ANONYMOUS_PREVIEW_COUNT = 3;
+
 apiRoutes.get("/opportunities", async (c) => {
   const opportunities = await storedOpportunities(c.env);
-  return c.json({ opportunities, checkedAt: utcNow(), source: "d1" });
+  const user = c.get("user");
+  const authenticated = Boolean(user);
+  const visible = authenticated ? opportunities : opportunities.slice(0, ANONYMOUS_PREVIEW_COUNT);
+  return c.json({
+    opportunities: visible,
+    checkedAt: utcNow(),
+    source: "d1",
+    authenticated,
+    totalCount: opportunities.length,
+  });
 });
 
 apiRoutes.get("/history", async (c) => {

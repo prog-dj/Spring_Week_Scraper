@@ -1,7 +1,11 @@
 let opportunityData = [];
 let dataCheckedAt = null;
 let dataLoading = true;
-/* The opportunity list is loaded from the local scraper API. No fallback records are fabricated here. */
+let opportunitiesAuthenticated = true;
+let opportunitiesTotalCount = 0;
+/* The opportunity list is loaded from the API. No fallback records are fabricated here.
+   Signed-out visitors only get a preview slice server-side -- see the "authenticated"/
+   "totalCount" fields, used to render the locked/blurred remainder. */
 async function loadOpportunities(force = false) {
   dataLoading = true;
   renderOpportunities();
@@ -11,6 +15,8 @@ async function loadOpportunities(force = false) {
     const payload = await response.json();
     opportunityData = payload.opportunities || [];
     dataCheckedAt = payload.checkedAt || null;
+    opportunitiesAuthenticated = payload.authenticated !== false;
+    opportunitiesTotalCount = payload.totalCount ?? opportunityData.length;
     $('#source-note').innerHTML = `<span>✓</span> Sources checked ${formatCheckedAt(dataCheckedAt)} · Official-page results only. Unknown fields stay unknown.`;
   } catch (error) {
     opportunityData = [];
@@ -196,7 +202,9 @@ function renderOpportunities() {
     const statusMatch = status === 'all' || item.status === status || (status === 'saved' && state.saved.includes(item.id));
     return textMatch && sectorMatch && statusMatch;
   });
-  $('#opportunity-grid').innerHTML = filtered.length ? filtered.map((item) => {
+  const lockedRemainder = opportunitiesAuthenticated ? 0 : Math.max(0, opportunitiesTotalCount - opportunityData.length);
+  const lockedHtml = lockedRemainder ? renderLockedOpportunityPreview(lockedRemainder) : '';
+  $('#opportunity-grid').innerHTML = (filtered.length ? filtered.map((item) => {
     const saved = state.saved.includes(item.id);
     const statusLabel = item.status === 'open' ? 'Open now' : item.status === 'upcoming' ? 'Upcoming' : item.status === 'closed' ? 'Closed' : item.status === 'finished' ? 'Finished' : 'Status unknown';
     const cardFacts = [];
@@ -213,7 +221,12 @@ function renderOpportunities() {
     cardFacts.push(`<div class="fact"><label>Application</label><span>${statusLabel}</span></div>`);
     const subline = item.location ? `${item.type} · ${item.location}` : item.type;
     return `<article class="opportunity-card"><div class="card-top"><div class="firm-line"><span class="firm-logo ${item.logoClass}">${item.logo}</span><div><strong>${item.firm}</strong><span>${item.sector}</span></div></div><button class="save-button ${saved ? 'saved' : ''}" data-save="${item.id}" aria-label="${saved ? 'Remove from saved' : 'Save'} ${item.firm}">${saved ? '♥' : '♡'}</button></div><h2>${item.role}</h2><span class="role">${subline}</span><div class="opportunity-facts">${cardFacts.join('')}</div><div class="card-bottom"><span class="deadline">Deadline: <strong>${item.deadline || 'Not published'}</strong></span><button class="small-button" data-apply="${item.id}">${state.applications.some((application) => application.opportunity_id === item.id) ? 'View application' : 'Track opportunity'}</button></div></article>`;
-  }).join('') : '<div class="empty-state"><strong>No verified opportunities are available.</strong><p>Try Refresh data after checking that the local scraper server is running.</p></div>';
+  }).join('') : '<div class="empty-state"><strong>No verified opportunities are available.</strong><p>Try Refresh data after checking that the local scraper server is running.</p></div>') + lockedHtml;
+}
+
+function renderLockedOpportunityPreview(count) {
+  const placeholders = Array.from({ length: Math.min(count, 6) }, () => `<article class="opportunity-card locked" aria-hidden="true"><div class="card-top"><div class="firm-line"><span class="firm-logo">••</span><div><strong>Firm name</strong><span>Sector</span></div></div></div><h2>Programme name</h2><span class="role">Location</span><div class="opportunity-facts"><div class="fact"><label>Deadline</label><span>••• •••</span></div><div class="fact"><label>Application</label><span>••••••</span></div></div></article>`).join('');
+  return `${placeholders}<div class="opportunity-lock-banner"><h3>Sign in to see all ${opportunitiesTotalCount} opportunities</h3><p>Free with Google sign-in -- no card, no catch.</p><a class="primary-button" href="/auth/login">Sign in with Google <span>→</span></a></div>`;
 }
 
 function renderApplications() {
@@ -393,6 +406,54 @@ function bindEvents() {
   $('#practice-next-prompt-button').addEventListener('click', () => nextPracticeQuestion());
   $('#practice-answer-input').addEventListener('input', handlePracticeAnswerInput);
   $('#practice-answer-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handlePracticeSubmit(); } });
+  $('#export-data-button').addEventListener('click', exportAccountData);
+  $('#delete-account-button').addEventListener('click', confirmDeleteAccount);
+  $('#cookie-ack-button').addEventListener('click', dismissCookieBanner);
+}
+
+// --- GDPR: account export / deletion ---------------------------------------
+async function exportAccountData() {
+  try {
+    const response = await fetch('/api/account/export');
+    if (!response.ok) throw new Error('export failed');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'springr-account-export.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    showToast('Could not export your data right now');
+  }
+}
+
+function confirmDeleteAccount() {
+  openModal('<span class="eyebrow">DELETE ACCOUNT</span><h2>This permanently deletes your account.</h2><p>Every saved opportunity, tracked application, workspace note, and uploaded document tied to your account will be permanently deleted. This cannot be undone.</p><div class="modal-form"><button class="primary-button full-width" id="confirm-delete-account" style="background:var(--red)">Yes, delete everything</button><button class="secondary-button full-width" id="cancel-delete-account">Cancel</button></div>');
+  $('#cancel-delete-account').addEventListener('click', closeModal);
+  $('#confirm-delete-account').addEventListener('click', async () => {
+    try {
+      const response = await fetch('/api/account', { method: 'DELETE' });
+      if (!response.ok) throw new Error('delete failed');
+      window.location.href = '/';
+    } catch (error) {
+      showToast('Could not delete your account right now');
+    }
+  });
+}
+
+// --- Cookie notice ----------------------------------------------------------
+const COOKIE_ACK_KEY = 'springr_cookie_ack';
+function initCookieBanner() {
+  let acknowledged = false;
+  try { acknowledged = localStorage.getItem(COOKIE_ACK_KEY) === '1'; } catch (error) { /* private mode etc -- just show the banner every visit */ }
+  $('#cookie-banner').hidden = acknowledged;
+}
+function dismissCookieBanner() {
+  $('#cookie-banner').hidden = true;
+  try { localStorage.setItem(COOKIE_ACK_KEY, '1'); } catch (error) { /* nothing we can do if storage is blocked */ }
 }
 
 // --- Practice Studio: randomly generated quant/finance drills, entirely client-side --------
@@ -740,6 +801,7 @@ async function boot() {
   applyProfileToDom();
   if (user) await loadUserState();
   renderOverview(); renderOpportunities(); renderApplications(); renderDocuments(); renderPracticeModules(); bindEvents();
+  initCookieBanner();
   loadOpportunities();
 }
 

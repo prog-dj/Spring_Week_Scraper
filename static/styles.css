@@ -305,6 +305,21 @@ h1, h2, h3, p { margin: 0; }
 .opportunity-grid { display: grid; gap: 14px; grid-template-columns: repeat(3, 1fr); }
 .opportunity-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); display: flex; flex-direction: column; padding: 18px; transition: border-color 0.12s ease; }
 .opportunity-card:hover { border-color: var(--border-strong); }
+.opportunity-card.locked { filter: blur(5px); pointer-events: none; user-select: none; }
+.opportunity-lock-banner {
+  align-items: center;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  grid-column: 1 / -1;
+  padding: 28px;
+  text-align: center;
+}
+.opportunity-lock-banner h3 { font: 600 16px var(--font); margin: 0; }
+.opportunity-lock-banner p { color: var(--accent-ink); font-size: 12px; margin: 0; }
 .card-top { align-items: flex-start; display: flex; justify-content: space-between; }
 .save-button { color: var(--border-strong); font-size: 17px; line-height: 1; padding: 2px; transition: color 0.12s ease; }
 .save-button:hover { color: var(--muted); }
@@ -401,6 +416,10 @@ h1, h2, h3, p { margin: 0; }
 
 .profile-panel h2 { font-size: 16px; margin-top: 10px; }
 .profile-subtitle { color: var(--muted); font-size: 11px; margin: 4px 0 0; }
+.account-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+.account-actions .text-button { font-size: 11px; text-align: center; }
+.secondary-button.danger { border-color: var(--red); color: var(--red); }
+.secondary-button.danger:hover { background: var(--red-bg); }
 
 /* =========================================================================
    LOCKED STATE / SIGN-IN PROMPTS
@@ -513,3 +532,41 @@ h1, h2, h3, p { margin: 0; }
   .filter-toolbar select { flex: 1; min-width: 0; }
   .modal { padding: 22px; }
 }
+
+/* =========================================================================
+   LEGAL PAGE (privacy.html) + COOKIE NOTICE
+   ========================================================================= */
+
+.sidebar-privacy-link { color: var(--sidebar-muted); display: block; font-size: 11px; margin: 10px 2px 0; text-align: center; }
+.sidebar-privacy-link:hover { color: var(--sidebar-ink); }
+
+.legal-page { margin: 0 auto; max-width: 720px; padding: 48px 24px 80px; }
+.legal-page a { color: var(--accent); }
+.legal-back { color: var(--muted); display: inline-block; font-size: 12px; font-weight: 600; margin-bottom: 24px; }
+.legal-page h1 { font: 600 26px var(--font); letter-spacing: -0.4px; margin: 0 0 6px; }
+.legal-page .legal-updated { color: var(--muted); font-size: 12px; margin: 0 0 32px; }
+.legal-page h2 { font: 600 16px var(--font); margin: 32px 0 10px; }
+.legal-page p, .legal-page li { color: var(--ink-secondary); font-size: 13px; line-height: 1.7; }
+.legal-page ul { margin: 8px 0; padding-left: 20px; }
+.legal-page .legal-note { background: var(--accent-subtle); border-radius: var(--radius-sm); color: var(--accent-ink); font-size: 12px; padding: 12px 14px; }
+
+.cookie-banner {
+  background: var(--sidebar-bg);
+  border-radius: var(--radius-md);
+  bottom: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  color: var(--sidebar-ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  left: 16px;
+  max-width: 560px;
+  padding: 16px 18px;
+  position: fixed;
+  z-index: 50;
+}
+.cookie-banner p { color: var(--sidebar-muted); font-size: 12px; line-height: 1.6; margin: 0; }
+.cookie-banner p a { color: var(--sidebar-ink); }
+.cookie-banner-actions { display: flex; flex: 0 0 auto; gap: 8px; }

@@ -10,6 +10,7 @@ import { savedRoutes } from "./routes/saved";
 import { documentsRoutes } from "./routes/documents";
 import { adminRoutes } from "./routes/admin";
 import { ingestRoutes } from "./routes/ingest";
+import { accountRoutes } from "./routes/account";
 
 const app = new Hono<HonoEnv>({ strict: false });
 
@@ -23,7 +24,7 @@ app.use("*", async (c, next) => {
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   c.header(
     "Content-Security-Policy",
-    "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   );
   c.header("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
 });
@@ -36,6 +37,7 @@ app.route("/api/workspace", new Hono<HonoEnv>({ strict: false }).use("*", requir
 app.route("/api/applications", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", applicationsRoutes));
 app.route("/api/saved", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", savedRoutes));
 app.route("/api/documents", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", documentsRoutes));
+app.route("/api/account", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", accountRoutes));
 app.route("/api", new Hono<HonoEnv>({ strict: false }).use("*", requireAdmin).route("/", adminRoutes));
 app.route("/internal/ingest", ingestRoutes);
 
