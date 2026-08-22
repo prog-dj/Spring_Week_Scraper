@@ -96,7 +96,7 @@ def clean_text(html: str) -> str:
 def is_opportunity_candidate(result: dict) -> bool:
     haystack = f"{result.get('title', '')} {result.get('snippet', '')}".lower()
     terms = ("spring week", "spring insight", "insight week", "insight programme", "insight program", "first year programme", "first-year programme")
-    excluded = ("reddit.com", "targetjobs.co.uk", "brightnetwork.co.uk", "tracker", "calendar", "guide", "what is", "how do you get", "complete guide", "free resources")
+    excluded = ("reddit.com", "targetjobs.co.uk", "brightnetwork.co.uk", "higherin.com", "e4s.co.uk", "fe.training", "tracker", "calendar", "guide", "what is", "how do you get", "complete guide", "free resources")
     link = result.get("link", "").lower()
     return any(term in haystack for term in terms) and not any(term in f"{link} {haystack}" for term in excluded)
 
@@ -119,10 +119,20 @@ def search_serper() -> list[dict]:
 
 
 def extract_company(title: str, url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    known_domains = {
+        "jpmorganchase.com": "J.P. Morgan", "blackrock.com": "BlackRock",
+        "fidelityinternational.com": "Fidelity International", "ubs.com": "UBS",
+        "pgcareers.com": "Procter & Gamble", "pwc.co.uk": "PwC",
+        "cmsemergingtalent.com": "CMS", "goldmansachs.com": "Goldman Sachs",
+    }
+    for domain, company in known_domains.items():
+        if host == domain or host.endswith(f".{domain}"):
+            return company
     cleaned = re.sub(r"\s*[-|:–—].*$", "", title).strip()
     if cleaned and not any(term in cleaned.lower() for term in ("spring", "insight", "programme", "program", "week")):
         return cleaned
-    return urlparse(url).netloc.removeprefix("www.").split(".")[0].replace("-", " ").title()
+    return host.removeprefix("www.").split(".")[0].replace("-", " ").title()
 
 
 def extract_programme(title: str, snippet: str) -> str:
