@@ -28,16 +28,6 @@ function formatCheckedAt(value) {
   return new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-/* const opportunityData = [
-  { id: 'gs', firm: 'Goldman Sachs', logo: 'GS', logoClass: '', sector: 'Investment Banking', role: 'Spring Week 2027', location: 'London', type: 'Insight programme', deadline: '12 Sep 2026', deadlineDate: '2026-09-12', rate: 'Not published', source: 'Official careers page', status: 'open', perks: 'Desk shadowing · Networking · Mentoring' },
-  { id: 'barclays', firm: 'Barclays', logo: 'B', logoClass: 'blue', sector: 'Investment Banking', role: 'Spring Insight Programme', location: 'London', type: 'Paid programme', deadline: '04 Sep 2026', deadlineDate: '2026-09-04', rate: 'Not published', source: 'Official careers page', status: 'soon', perks: 'Paid placement · Skills workshops · Buddy scheme' },
-  { id: 'jpm', firm: 'J.P. Morgan', logo: 'JPM', logoClass: 'green', sector: 'Asset Management', role: 'Women in Finance Insight', location: 'London', type: 'Insight programme', deadline: '20 Sep 2026', deadlineDate: '2026-09-20', rate: 'Not published', source: 'Official careers page', status: 'open', perks: 'Senior speakers · Case study · Community' },
-  { id: 'mckinsey', firm: 'McKinsey & Company', logo: 'M', logoClass: 'coral', sector: 'Consulting', role: 'Freshman Insight Programme', location: 'London', type: 'Insight programme', deadline: '28 Aug 2026', deadlineDate: '2026-08-28', rate: 'Not published', source: 'Official careers page', status: 'soon', perks: 'Client project · Coaching · Alumni network' },
-  { id: 'pwc', firm: 'PwC', logo: 'pwc', logoClass: 'yellow', sector: 'Consulting', role: 'Flying Start Degree', location: 'Multiple UK', type: 'Paid placement', deadline: 'Rolling', deadlineDate: '2026-12-31', rate: 'Not published', source: 'Official careers page', status: 'open', perks: 'Paid placement · Professional qualification' },
-  { id: 'aos', firm: 'Allen & Overy Shearman', logo: 'A&O', logoClass: 'purple', sector: 'Law', role: 'Winter Internship', location: 'London', type: 'Insight programme', deadline: '05 Oct 2026', deadlineDate: '2026-10-05', rate: 'Not published', source: 'Official careers page', status: 'open', perks: 'Taster sessions · Trainee buddy · Socials' },
-  { id: 'blackrock', firm: 'BlackRock', logo: 'BLK', logoClass: 'blue', sector: 'Asset Management', role: 'Spring Insight Week', location: 'London', type: 'Insight programme', deadline: '18 Sep 2026', deadlineDate: '2026-09-18', rate: 'Not published', source: 'Official careers page', status: 'open', perks: 'Investment roundtables · Mentoring · Networking' },
-  { id: 'google', firm: 'Google', logo: 'G', logoClass: 'green', sector: 'Technology', role: 'STEP / Business Insight', location: 'London', type: 'Insight programme', deadline: 'Rolling', deadlineDate: '2026-12-31', rate: 'Not published', source: 'Official careers page', status: 'open', perks: 'Product deep dives · Speaker series · Community' }
-]; */
 
 const defaultApplications = [
   { id: 'barclays', status: 'In progress', next: 'Video OA due tomorrow', progress: 68 },
@@ -119,14 +109,26 @@ function renderOpportunities() {
   const status = $('#status-filter')?.value || 'all';
   const filtered = opportunityData.filter((item) => {
     const textMatch = `${item.firm} ${item.sector} ${item.location} ${item.role}`.toLowerCase().includes(query);
-    const sectorMatch = sector === 'all' || item.sector === sector;
+    const sectorMatch = sector === 'all' || (item.sector || '').split(',').map((s) => s.trim()).includes(sector);
     const statusMatch = status === 'all' || item.status === status || (status === 'saved' && state.saved.includes(item.id));
     return textMatch && sectorMatch && statusMatch;
   });
   $('#opportunity-grid').innerHTML = filtered.length ? filtered.map((item) => {
     const saved = state.saved.includes(item.id);
     const statusLabel = item.status === 'open' ? 'Open now' : item.status === 'upcoming' ? 'Upcoming' : item.status === 'closed' ? 'Closed' : item.status === 'finished' ? 'Finished' : 'Status unknown';
-    return `<article class="opportunity-card"><div class="card-top"><div class="firm-line"><span class="firm-logo ${item.logoClass}">${item.logo}</span><div><strong>${item.firm}</strong><span>${item.sector}</span></div></div><button class="save-button ${saved ? 'saved' : ''}" data-save="${item.id}" aria-label="${saved ? 'Remove from saved' : 'Save'} ${item.firm}">${saved ? '♥' : '♡'}</button></div><h2>${item.role}</h2><span class="role">${item.type} · ${item.location}</span><div class="opportunity-facts"><div class="fact"><label>Acceptance rate</label><span class="unknown">${item.rate || 'Not published'}</span></div><div class="fact"><label>Data status</label><span>${item.source}</span></div><div class="fact"><label>Future perks</label><span>${item.perks || 'Not stated on source page'}</span></div><div class="fact"><label>Application</label><span>${statusLabel}</span></div></div><div class="card-bottom"><span class="deadline">Deadline: <strong>${item.deadline || 'Not published'}</strong></span><button class="small-button" data-apply="${item.id}">${state.applications.some((application) => opportunityIdAliases[application.id] === item.id || application.id === item.id) ? 'View application' : 'Track opportunity'}</button></div></article>`;
+    const cardFacts = [];
+    if (Array.isArray(item.application_process) && item.application_process.length) {
+      cardFacts.push(`<div class="fact" style="grid-column:1/-1"><label>Application process</label><span>${item.application_process.join(' → ')}</span></div>`);
+    }
+    if (Array.isArray(item.eligibility) && item.eligibility.length) {
+      cardFacts.push(`<div class="fact" style="grid-column:1/-1"><label>Eligibility</label><span>${item.eligibility.join(' · ')}</span></div>`);
+    }
+    if (item.format) {
+      cardFacts.push(`<div class="fact"><label>Format</label><span>${item.format}</span></div>`);
+    }
+    cardFacts.push(`<div class="fact"><label>Data status</label><span>${item.source}</span></div>`);
+    cardFacts.push(`<div class="fact"><label>Application</label><span>${statusLabel}</span></div>`);
+    return `<article class="opportunity-card"><div class="card-top"><div class="firm-line"><span class="firm-logo ${item.logoClass}">${item.logo}</span><div><strong>${item.firm}</strong><span>${item.sector}</span></div></div><button class="save-button ${saved ? 'saved' : ''}" data-save="${item.id}" aria-label="${saved ? 'Remove from saved' : 'Save'} ${item.firm}">${saved ? '♥' : '♡'}</button></div><h2>${item.role}</h2><span class="role">${item.type} · ${item.location}</span><div class="opportunity-facts">${cardFacts.join('')}</div><div class="card-bottom"><span class="deadline">Deadline: <strong>${item.deadline || 'Not published'}</strong></span><button class="small-button" data-apply="${item.id}">${state.applications.some((application) => opportunityIdAliases[application.id] === item.id || application.id === item.id) ? 'View application' : 'Track opportunity'}</button></div></article>`;
   }).join('') : '<div class="empty-state"><strong>No verified opportunities are available.</strong><p>Try Refresh data after checking that the local scraper server is running.</p></div>';
 }
 
@@ -170,7 +172,23 @@ function openOpportunity(id) {
   const tracked = state.applications.find((application) => application.id === id);
   let tags = [];
   try { tags = JSON.parse(item.prep_tags || '[]'); } catch (error) { tags = []; }
-  openModal(`<span class="eyebrow">${item.sector.toUpperCase()} · ${String(item.source_type || 'unknown').toUpperCase()} SOURCE</span><h2>${item.firm}: ${item.role}</h2><p>${item.type} in ${item.location || 'Location not published'}. Acceptance rate: <strong>${(item.rate || 'not published').toLowerCase()}</strong>. We never infer rates from unrelated data.</p><div class="modal-form"><div class="fact"><label>Application status</label><span>${item.status} · ${item.confidence} confidence</span></div><div class="fact"><label>Application deadline</label><span>${item.deadline || 'Not published'}</span></div><div class="fact"><label>Programme dates</label><span>${item.programme_dates || 'Not published'}</span></div><div class="fact"><label>Future perks</label><span>${item.perks || 'Not stated on source page'}</span></div><div class="fact"><label>Evidence</label><span>${item.evidence_excerpt || item.source}</span></div><div class="fact"><label>Suggested preparation</label><span>${tags.join(' · ') || 'General application preparation'}</span></div><a class="secondary-button" href="${item.url}" target="_blank" rel="noreferrer">Open official source ↗</a><button class="primary-button" id="modal-track">${tracked ? 'Open in applications' : 'Add to applications'} <span>→</span></button><button class="secondary-button" id="modal-workspace">Open application workspace</button><div class="fact" id="history-panel"><label>Status history</label><span>Loading history…</span></div></div>`);
+  const modalFacts = [
+    `<div class="fact"><label>Application status</label><span>${item.status} · ${item.confidence} confidence</span></div>`,
+    `<div class="fact"><label>Application deadline</label><span>${item.deadline || 'Not published'}</span></div>`,
+    `<div class="fact"><label>Programme dates</label><span>${item.programme_dates || 'Not published'}</span></div>`,
+  ];
+  if (Array.isArray(item.application_process) && item.application_process.length) {
+    modalFacts.push(`<div class="fact"><label>Application process</label><span>${item.application_process.join(' → ')}</span></div>`);
+  }
+  if (Array.isArray(item.eligibility) && item.eligibility.length) {
+    modalFacts.push(`<div class="fact"><label>Eligibility</label><span>${item.eligibility.join(' · ')}</span></div>`);
+  }
+  if (item.format) {
+    modalFacts.push(`<div class="fact"><label>Format</label><span>${item.format}</span></div>`);
+  }
+  modalFacts.push(`<div class="fact"><label>Evidence</label><span>${item.evidence_excerpt || item.source}</span></div>`);
+  modalFacts.push(`<div class="fact"><label>Suggested preparation</label><span>${tags.join(' · ') || 'General application preparation'}</span></div>`);
+  openModal(`<span class="eyebrow">${item.sector.toUpperCase()} · ${String(item.source_type || 'unknown').toUpperCase()} SOURCE</span><h2>${item.firm}: ${item.role}</h2><p>${item.type} in ${item.location || 'Location not published'}.</p><div class="modal-form">${modalFacts.join('')}<a class="secondary-button" href="${item.url}" target="_blank" rel="noreferrer">Open official source ↗</a><button class="primary-button" id="modal-track">${tracked ? 'Open in applications' : 'Add to applications'} <span>→</span></button><button class="secondary-button" id="modal-workspace">Open application workspace</button><div class="fact" id="history-panel"><label>Status history</label><span>Loading history…</span></div></div>`);
   fetch(`/api/history?opportunity_id=${encodeURIComponent(item.id)}`).then((response) => response.json()).then((payload) => { const panel = $('#history-panel span'); if (panel) panel.textContent = payload.history?.length ? payload.history.map((entry) => `${entry.status} · ${new Date(entry.observed_at).toLocaleDateString()}`).join(' → ') : 'No previous status changes recorded'; }).catch(() => { const panel = $('#history-panel span'); if (panel) panel.textContent = 'History unavailable'; });
   $('#modal-track').addEventListener('click', () => { closeModal(); if (tracked) navigate('applications'); else trackApplication(id); });
   $('#modal-workspace').addEventListener('click', () => openWorkspace(item));

@@ -20,9 +20,22 @@ The server uses only Python's standard library. It serves the frontend and expos
 
 ## Configuration
 
-Copy `.env.example` values into your environment and set `SERPER_API_KEY`. The discovery worker then searches generic spring-week and insight-week queries rather than a fixed firm list. `SPRINGBOARD_REFRESH_HOURS` controls the background refresh interval.
+Copy `.env.example` values into your environment and set `SERPER_API_KEY`. `SPRINGBOARD_REFRESH_HOURS` controls the background refresh interval.
 
-The pipeline uses Serper.dev for discovery, `requests` and BeautifulSoup for ordinary pages, and Playwright/Chromium when a page is blocked or primarily JavaScript-rendered. Install the browser runtime once with `python -m playwright install chromium`.
+## Discovery
+
+Two independent discovery paths feed the same verification and dedupe pipeline:
+
+- **Search discovery** (`search_serper`) runs generic spring-week/insight-week queries against Serper.dev. Good at finding new/unknown employers, but bounded by search ranking and requires `SERPER_API_KEY`.
+- **Direct crawl** (`search_seed_employers`) reads `sources.json`, a curated list of ~90 known UK spring-week employers across banking, asset management, trading, consulting, law, tech, and corporates. For each one it fetches the employer's careers hub page and `/sitemap.xml` directly and pulls out links that look like an insight/spring-week opportunity — no search engine involved, so it doesn't depend on ranking and works even without a Serper key. This is the primary lever for maximizing coverage: add more employers to `sources.json` to expand it.
+
+Both fetch phases run candidate/employer requests concurrently (`ThreadPoolExecutor`) and share a single Playwright browser instance for any page that needs JS rendering, rather than launching a new browser per page — this keeps a ~90-employer crawl to roughly a minute instead of several.
+
+Results from both paths are merged, verified (`requests` + BeautifulSoup, falling back to Playwright/Chromium for blocked or JS-heavy pages — install once with `python -m playwright install chromium`), and deduped by normalized company + opportunity type so the same opportunity discovered via multiple URLs (e.g. an employer page and a syndicated copy) only appears once.
+
+Employer URLs in `sources.json` can go stale (companies restructure career pages). When a seed employer's page can't be fetched at all, it's recorded in the `seed_failures` table and exposed via `GET /api/seed-health` rather than silently dropped, so the list can be maintained over time.
+
+Social media, forums, and pure aggregator sites (Instagram, LinkedIn, Facebook, Reddit, Gradcracker, thestudentroom, etc.) are excluded from search discovery entirely — they don't host the actual application page and were a source of duplicate/noisy entries.
 
 ## Data provenance
 
