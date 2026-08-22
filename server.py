@@ -249,6 +249,12 @@ def discover_and_refresh() -> dict:
         for item in verified:
             upsert_opportunity(item)
         with db_lock, db_connect() as connection:
+            current_ids = [item["id"] for item in verified]
+            if current_ids:
+                placeholders = ",".join("?" for _ in current_ids)
+                connection.execute(f"DELETE FROM opportunities WHERE id NOT IN ({placeholders})", current_ids)
+            else:
+                connection.execute("DELETE FROM opportunities")
             connection.execute("INSERT INTO discovery_runs (started_at, finished_at, query_count, result_count, verified_count) VALUES (?, ?, ?, ?, ?)", (started, utc_now(), len(SEARCH_QUERIES), len(candidates), len(verified)))
         return {"status": "complete", "candidates": len(candidates), "verified": len(verified), "checkedAt": utc_now()}
     except Exception as error:
