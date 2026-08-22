@@ -651,6 +651,9 @@ function nextPracticeQuestion() {
     practiceState.promptsReviewed += 1;
     $('#practice-answer-row').hidden = true;
     $('#practice-reveal-controls').hidden = false;
+    const estimateInput = $('#practice-estimate-input');
+    estimateInput.value = '';
+    estimateInput.focus();
   } else {
     $('#practice-answer-row').hidden = false;
     $('#practice-reveal-controls').hidden = true;
