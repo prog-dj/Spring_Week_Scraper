@@ -74,6 +74,12 @@ def init_db() -> None:
             result_count INTEGER NOT NULL DEFAULT 0, verified_count INTEGER NOT NULL DEFAULT 0,
             error TEXT
         );
+        CREATE TABLE IF NOT EXISTS application_workspaces (
+            opportunity_id TEXT PRIMARY KEY,
+            payload TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
+        );
         """)
         columns = {row[1] for row in connection.execute("PRAGMA table_info(opportunities)")}
         if "source_type" not in columns:
@@ -235,13 +241,13 @@ def render_with_playwright(url: str) -> str | None:
         finally:
             browser.close()
 
-    def prep_tags(text: str) -> list[str]:
-        lowered = text.lower()
-        if any(term in lowered for term in ("law", "legal", "solicitor")):
-            return ["commercial awareness", "case study", "motivation"]
-        if any(term in lowered for term in ("technology", "engineering", "software", "step")):
-            return ["technical OA", "behavioural interview", "motivation"]
-        return ["motivation", "commercial awareness", "numerical OA"]
+def prep_tags(text: str) -> list[str]:
+    lowered = text.lower()
+    if any(term in lowered for term in ("law", "legal", "solicitor")):
+        return ["commercial awareness", "case study", "motivation"]
+    if any(term in lowered for term in ("technology", "engineering", "software", "step")):
+        return ["technical OA", "behavioural interview", "motivation"]
+    return ["motivation", "commercial awareness", "numerical OA"]
 
 
 def evidence_excerpt(text: str, status: str, deadline: str | None) -> str:
@@ -351,6 +357,38 @@ def stored_opportunities() -> list[dict]:
     return opportunities
 
 
+def default_workspace(opportunity_id: str) -> dict:
+    return {
+        "opportunity_id": opportunity_id,
+        "eligibility": [{"label": "Check year-group eligibility", "complete": False}, {"label": "Check right-to-work requirements", "complete": False}, {"label": "Check location and programme dates", "complete": False}],
+        "required_documents": [{"label": "CV", "document_id": None, "complete": False}, {"label": "Cover letter", "document_id": None, "complete": False}, {"label": "Transcript", "document_id": None, "complete": False}],
+        "cv_document_id": None,
+        "cover_letter_document_id": None,
+        "oa_plan": ["Complete numerical reasoning drill", "Complete situational judgement drill"],
+        "interview_questions": ["Why this firm?", "Why this programme?", "Tell me about a time you solved a difficult problem."],
+        "reminder_enabled": False,
+        "reminder_date": None,
+        "notes": "",
+        "submission_evidence": None,
+        "status": "Saved",
+    }
+
+
+def get_workspace(opportunity_id: str) -> dict:
+    with db_lock, db_connect() as connection:
+        row = connection.execute("SELECT payload FROM application_workspaces WHERE opportunity_id = ?", (opportunity_id,)).fetchone()
+    return json.loads(row["payload"]) if row else default_workspace(opportunity_id)
+
+
+def save_workspace(opportunity_id: str, payload: dict) -> dict:
+    payload["opportunity_id"] = opportunity_id
+    updated_at = utc_now()
+    with db_lock, db_connect() as connection:
+        connection.execute("INSERT INTO application_workspaces (opportunity_id, payload, updated_at) VALUES (?, ?, ?) ON CONFLICT(opportunity_id) DO UPDATE SET payload=excluded.payload, updated_at=excluded.updated_at", (opportunity_id, json.dumps(payload), updated_at))
+    payload["updated_at"] = updated_at
+    return payload
+
+
 def scheduler() -> None:
     while True:
         if os.getenv("SERPER_API_KEY"):
@@ -380,8 +418,27 @@ class AppHandler(SimpleHTTPRequestHandler):
                 else:
                     rows = connection.execute("SELECT * FROM status_history ORDER BY observed_at DESC LIMIT 200").fetchall()
             self.send_json({"history": [dict(row) for row in rows]})
+        elif path == "/api/workspace":
+            query = dict(part.split("=", 1) for part in urlparse(self.path).query.split("&") if "=" in part)
+            opportunity_id = query.get("opportunity_id")
+            if not opportunity_id:
+                self.send_json({"error": "opportunity_id is required"})
+            else:
+                self.send_json({"workspace": get_workspace(opportunity_id)})
         else:
             super().do_GET()
+
+    def do_POST(self) -> None:
+        if urlparse(self.path).path != "/api/workspace":
+            self.send_error(404)
+            return
+        length = int(self.headers.get("Content-Length", "0"))
+        body = json.loads(self.rfile.read(length) or "{}")
+        opportunity_id = body.pop("opportunity_id", None)
+        if not opportunity_id:
+            self.send_json({"error": "opportunity_id is required"})
+            return
+        self.send_json({"workspace": save_workspace(opportunity_id, body)})
 
     def send_json(self, payload: dict) -> None:
         body = json.dumps(payload).encode("utf-8")
