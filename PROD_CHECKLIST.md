@@ -8,7 +8,7 @@ Cloudflare Workers + D1 + R2 + GitHub Actions architecture.
 - **File storage security** — documents are stored server-side in R2, not the
   client. Uploads are validated by magic-byte sniffing (`worker/src/storage/fileValidation.ts`),
   not just extension/declared Content-Type (both are attacker-controlled).
-  Allowed types: PDF, DOC, DOCX, PNG, JPG. 10MB size cap. Rejects a file whose
+  Allowed types: PDF, DOC, DOCX. 2MB size cap. Rejects a file whose
   real content doesn't match its extension (e.g. an `.exe` renamed to `.pdf`).
 - **Private file access** — downloads (`GET /api/documents/:id/download`) check
   the document belongs to the requesting session's user before serving it, and

@@ -3,7 +3,7 @@
 // they're attacker-controlled -- so every upload is sniffed by magic bytes
 // before it's allowed into R2.
 
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
+export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024; // 2MB
 
 type AllowedType = {
   mimeType: string;
@@ -35,16 +35,6 @@ const ALLOWED_TYPES: AllowedType[] = [
     extensions: [".doc"],
     sniff: (b) => matchesBytes(b, 0, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
   },
-  {
-    mimeType: "image/png",
-    extensions: [".png"],
-    sniff: (b) => matchesBytes(b, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  },
-  {
-    mimeType: "image/jpeg",
-    extensions: [".jpg", ".jpeg"],
-    sniff: (b) => matchesBytes(b, 0, [0xff, 0xd8, 0xff]),
-  },
 ];
 
 export type FileValidationResult =
@@ -58,7 +48,7 @@ function hasAllowedExtension(filename: string, allowed: AllowedType): boolean {
 
 export function validateUploadedFile(filename: string, bytes: Uint8Array): FileValidationResult {
   if (bytes.length === 0) return { ok: false, reason: "file is empty" };
-  if (bytes.length > MAX_UPLOAD_BYTES) return { ok: false, reason: "file exceeds 10MB limit" };
+  if (bytes.length > MAX_UPLOAD_BYTES) return { ok: false, reason: "file exceeds 2MB limit" };
 
   // Require the file's actual content (magic bytes) to match a real signature
   // AND that signature's type to match the filename's extension -- catches
@@ -71,7 +61,7 @@ export function validateUploadedFile(filename: string, bytes: Uint8Array): FileV
       return { ok: true, mimeType: allowed.mimeType };
     }
   }
-  return { ok: false, reason: "unrecognized or unsupported file type (allowed: PDF, DOC, DOCX, PNG, JPG)" };
+  return { ok: false, reason: "unrecognized or unsupported file type (allowed: PDF, DOC, DOCX)" };
 }
 
 // Strips path separators and control characters, keeps the upload's own

@@ -39,7 +39,6 @@
       <header class="topbar">
         <div class="breadcrumb"><span>Workspace</span><span class="slash">/</span><strong id="page-breadcrumb">Overview</strong></div>
         <div class="topbar-actions">
-          <button class="icon-button" id="notification-button" aria-label="View notifications" title="Notifications"><span class="notification-dot"></span>♧</button>
           <button class="help-button" id="help-button">Need help?</button>
         </div>
       </header>
@@ -84,20 +83,45 @@
             <div><span class="practice-label" id="practice-active-label">DRILL</span><h2 id="practice-active-title"></h2></div>
             <button class="text-button" id="practice-exit-button">← All drills</button>
           </div>
-          <div class="practice-stats"><span>Score<strong id="practice-score">0/0</strong></span><span>Streak<strong id="practice-streak">0</strong></span></div>
-          <div class="practice-question-card">
-            <p class="practice-question" id="practice-question"></p>
-            <div class="practice-answer-row" id="practice-answer-row">
-              <input class="practice-answer-input" id="practice-answer-input" type="text" inputmode="decimal" placeholder="Your answer" autocomplete="off" />
-              <button class="primary-button" id="practice-submit-button">Check</button>
-              <button class="secondary-button" id="practice-skip-button">Skip</button>
+
+          <div class="practice-duration-picker" id="practice-duration-picker">
+            <p>Choose your time:</p>
+            <div class="practice-duration-options">
+              <button class="secondary-button" data-practice-duration="30">30 seconds</button>
+              <button class="secondary-button" data-practice-duration="60">1 minute</button>
+              <button class="secondary-button" data-practice-duration="120">2 minutes</button>
             </div>
-            <div class="practice-reveal-controls" id="practice-reveal-controls" hidden>
-              <button class="primary-button" id="practice-reveal-button">Show structuring framework</button>
-              <button class="secondary-button" id="practice-next-prompt-button">Next prompt</button>
+          </div>
+
+          <div class="practice-session" id="practice-session" hidden>
+            <div class="practice-stats">
+              <span>Time<strong id="practice-timer">0:00</strong></span>
+              <span id="practice-score-stat">Score<strong id="practice-score">0</strong></span>
+              <span id="practice-streak-stat">Streak<strong id="practice-streak">0</strong></span>
+              <span id="practice-prompts-stat" hidden>Prompts<strong id="practice-prompts">0</strong></span>
             </div>
-            <p class="practice-feedback" id="practice-feedback"></p>
-            <pre class="practice-reveal" id="practice-reveal" hidden></pre>
+            <div class="practice-question-card" id="practice-question-card">
+              <p class="practice-question" id="practice-question"></p>
+              <div class="practice-answer-row" id="practice-answer-row">
+                <input class="practice-answer-input" id="practice-answer-input" type="text" inputmode="decimal" placeholder="Your answer" autocomplete="off" />
+                <button class="primary-button" id="practice-submit-button">Check</button>
+                <button class="secondary-button" id="practice-skip-button">Skip</button>
+              </div>
+              <div class="practice-reveal-controls" id="practice-reveal-controls" hidden>
+                <button class="primary-button" id="practice-reveal-button">Show worked example</button>
+                <button class="secondary-button" id="practice-next-prompt-button">Next prompt</button>
+              </div>
+              <p class="practice-feedback" id="practice-feedback"></p>
+              <pre class="practice-reveal" id="practice-reveal" hidden></pre>
+            </div>
+            <div class="practice-results" id="practice-results" hidden>
+              <h3>Time's up!</h3>
+              <p id="practice-results-summary"></p>
+              <div class="practice-results-actions">
+                <button class="primary-button" id="practice-again-button">Play again</button>
+                <button class="secondary-button" id="practice-results-exit-button">All drills</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>

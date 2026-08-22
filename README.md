@@ -124,7 +124,7 @@ client — it's free). The scraped `opportunities` catalog is global/shared; sav
 opportunities, tracked applications, document metadata, and per-opportunity
 workspaces are all scoped to the signed-in user. Uploaded document files are
 stored server-side in Cloudflare R2 (validated by magic-byte sniffing, size-capped
-at 10MB) — real multi-device access, not per-browser storage.
+at 2MB, PDF/DOC/DOCX only) — real multi-device access, not per-browser storage.
 
 ## Deploying
 

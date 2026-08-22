@@ -335,7 +335,7 @@ function bindEvents() {
   $('#logout-button').addEventListener('click', () => { window.location.href = '/auth/logout'; });
   $('#add-document-button').addEventListener('click', () => {
     if (!requireLogin('Sign in to store documents.')) return;
-    openModal('<span class="eyebrow">DOCUMENT VAULT</span><h2>Add a document</h2><p>Files are uploaded and stored securely on your account (max 10MB).</p><form class="modal-form" id="document-form"><label>File<label class="upload-dropzone" id="upload-dropzone" for="document-file"><input id="document-file" name="file" type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" required hidden /><span class="upload-icon">⇧</span><span class="upload-text" id="upload-text"><strong>Click to choose a file</strong><small>or drag it here · PDF, DOC, or DOCX</small></span></label></label><label>Document name<input name="name" placeholder="e.g. Consulting CV" required /></label><label>Type<select name="doc_type"><option>PDF</option><option>DOCX</option><option>DOC</option></select></label><button class="primary-button full-width">Add document <span>→</span></button></form>');
+    openModal('<span class="eyebrow">DOCUMENT VAULT</span><h2>Add a document</h2><p>Files are uploaded and stored securely on your account (PDF, DOC, or DOCX only, max 2MB).</p><form class="modal-form" id="document-form"><label>File<label class="upload-dropzone" id="upload-dropzone" for="document-file"><input id="document-file" name="file" type="file" accept=".pdf,.doc,.docx" required hidden /><span class="upload-icon">⇧</span><span class="upload-text" id="upload-text"><strong>Click to choose a file</strong><small>or drag it here · PDF, DOC, or DOCX, up to 2MB</small></span></label></label><label>Document name<input name="name" placeholder="e.g. Consulting CV" required /></label><label>Type<select name="doc_type"><option>PDF</option><option>DOCX</option><option>DOC</option></select></label><button class="primary-button full-width">Add document <span>→</span></button></form>');
     const dropzone = $('#upload-dropzone');
     const fileInput = $('#document-file');
     const uploadText = $('#upload-text');
@@ -384,8 +384,11 @@ function bindEvents() {
   });
   document.addEventListener('click', (event) => { if (event.target.id === 'help-close') closeModal(); });
   $('#practice-exit-button').addEventListener('click', exitPracticeModule);
+  $('#practice-results-exit-button').addEventListener('click', exitPracticeModule);
+  $('#practice-again-button').addEventListener('click', () => beginPracticeSession(practiceState.durationSeconds));
+  $$('[data-practice-duration]').forEach((button) => button.addEventListener('click', () => beginPracticeSession(Number(button.dataset.practiceDuration))));
   $('#practice-submit-button').addEventListener('click', handlePracticeSubmit);
-  $('#practice-skip-button').addEventListener('click', () => nextPracticeQuestion());
+  $('#practice-skip-button').addEventListener('click', () => { if (practiceState.finished) return; practiceState.streak = 0; renderPracticeStats(); nextPracticeQuestion(); });
   $('#practice-reveal-button').addEventListener('click', handlePracticeReveal);
   $('#practice-next-prompt-button').addEventListener('click', () => nextPracticeQuestion());
   $('#practice-answer-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handlePracticeSubmit(); } });
@@ -534,21 +537,21 @@ function genSequence() {
 }
 
 const SIZING_PROMPTS = [
-  'Estimate the number of piano tuners in New York City.',
-  'How many golf balls would fit inside a school bus?',
-  'Estimate the annual revenue of a mid-sized Starbucks in central London.',
-  'How many weddings take place in the UK each year?',
-  'Estimate the number of Ubers operating in London on a Friday night.',
-  'How many pizzas are ordered in the UK on a Saturday night?',
-  'Estimate the size of the UK online food-delivery market.',
-  'How many smartphones are sold globally each year?',
-  'Estimate the number of petrol stations in the UK.',
-  'How many people fly through Heathrow Airport in a year?',
-  'Estimate the number of investment bankers working in the City of London.',
-  'How many books are sold in the UK each year?',
-  'Estimate the number of coffee cups sold daily in central London.',
-  'How many cars are on the road in London at 8am on a weekday?',
-  'Estimate the size of the UK private-tutoring market.',
+  { prompt: 'Estimate the number of piano tuners in New York City.', worked: 'NYC population ≈ 8.5M → ≈ 3.3M households (2.5 people/household). Assume ≈ 2% own a piano → ≈ 66,000 pianos. Each is tuned about once a year, and one tuner can service ≈ 250 pianos/year → ≈ 66,000 / 250 ≈ 260 piano tuners.' },
+  { prompt: 'How many golf balls would fit inside a school bus?', worked: 'Usable interior volume ≈ 6m × 2m × 2m × 60% (seats/aisle) ≈ 14.4 m³. A golf ball is ≈ 42cm³, and sphere packing fills ≈ 65% of space → ≈ 0.65 × 1,000,000 / 42 ≈ 15,500 balls per m³ → ≈ 14.4 × 15,500 ≈ 220,000 golf balls.' },
+  { prompt: 'Estimate the annual revenue of a mid-sized Starbucks in central London.', worked: 'Assume ≈ 300 customers/day, average spend ≈ £4.50 → daily revenue ≈ £1,350 → annual revenue ≈ £1,350 × 365 ≈ £490,000.' },
+  { prompt: 'How many weddings take place in the UK each year?', worked: 'UK population ≈ 67M. Assume a marriage rate of ≈ 9 people per 1,000 per year → ≈ 600,000 people marrying → ≈ 300,000 weddings (2 people each).' },
+  { prompt: 'Estimate the number of Ubers operating in London on a Friday night.', worked: "London population ≈ 9M. Assume ≈ 1 in 500 people is an active driver on the road at peak → ≈ 18,000 total ride-hail cars, of which Uber has ≈ 70% share → ≈ 12,500 active Uber cars." },
+  { prompt: 'How many pizzas are ordered in the UK on a Saturday night?', worked: 'UK population ≈ 67M. Assume ≈ 30% order a takeaway on a Saturday night, ≈ 25% of those choose pizza, and the average order covers 2 people → ≈ 67M × 0.3 × 0.25 / 2 ≈ 2.5M pizzas.' },
+  { prompt: 'Estimate the size of the UK online food-delivery market.', worked: 'Assume ≈ 30M adults order online food delivery regularly, spending ≈ £15/order and ordering ≈ 1.5 times/month → annual spend/user ≈ £270 → market size ≈ 30M × £270 ≈ £8.1bn.' },
+  { prompt: 'How many smartphones are sold globally each year?', worked: 'World population ≈ 8bn. Assume ≈ 60% own a smartphone and the average replacement cycle is ≈ 2.5 years → sold/year ≈ 8bn × 0.6 / 2.5 ≈ 1.9bn.' },
+  { prompt: 'Estimate the number of petrol stations in the UK.', worked: 'UK has ≈ 30M licensed vehicles. Assume each station serves a catchment of ≈ 4,000 vehicles → ≈ 30M / 4,000 ≈ 7,500 petrol stations.' },
+  { prompt: 'How many people fly through Heathrow Airport in a year?', worked: 'Assume ≈ 1,300 flights/day at an average of ≈ 150 passengers each → ≈ 195,000 passenger movements/day → ≈ 195,000 × 365 ≈ 71M/year, rounding to ≈ 75-80M given peak-season loading.' },
+  { prompt: 'Estimate the number of investment bankers working in the City of London.', worked: "City + Canary Wharf financial-services workforce ≈ 350,000. Assume ≈ 6% are specifically in investment-banking roles (as opposed to insurance, retail banking, asset management, etc.) → ≈ 21,000." },
+  { prompt: 'How many books are sold in the UK each year?', worked: 'UK population ≈ 67M. Assume ≈ 40% buy books regularly, averaging ≈ 6 books/year → ≈ 67M × 0.4 × 6 ≈ 160M books/year.' },
+  { prompt: 'Estimate the number of coffee cups sold daily in central London.', worked: 'Central London footfall/workforce ≈ 1.5M people. Assume ≈ 40% buy a coffee out on a typical day, averaging ≈ 1.3 cups → ≈ 1.5M × 0.4 × 1.3 ≈ 780,000 cups/day.' },
+  { prompt: 'How many cars are on the road in London at 8am on a weekday?', worked: 'London has ≈ 2.6M registered cars. Assume ≈ 15% are actively being driven during the morning peak hour → ≈ 390,000 cars.' },
+  { prompt: 'Estimate the size of the UK private-tutoring market.', worked: 'UK has ≈ 9M school-age children. Assume ≈ 25% use private tutoring, spending ≈ £500/year on average → ≈ 9M × 0.25 × £500 ≈ £1.1bn.' },
 ];
 const SIZING_FRAMEWORK = `1. Clarify scope -- geography, timeframe, definitions.
 2. Pick an approach -- top-down (start from a known total, narrow down) or bottom-up (build from one unit, scale up).
@@ -557,7 +560,11 @@ const SIZING_FRAMEWORK = `1. Clarify scope -- geography, timeframe, definitions.
 5. Sanity-check against something you know, and round to a sensible order of magnitude.
 6. Give your answer as a range, and flag the assumption you're least sure about.`;
 function genSizing() {
-  return { prompt: pick(SIZING_PROMPTS), reveal: SIZING_FRAMEWORK };
+  const item = pick(SIZING_PROMPTS);
+  return {
+    prompt: item.prompt,
+    reveal: `${SIZING_FRAMEWORK}\n\nIllustrative worked example (one reasonable set of assumptions -- yours can differ):\n${item.worked}`,
+  };
 }
 
 const PRACTICE_MODULES = [
@@ -568,31 +575,72 @@ const PRACTICE_MODULES = [
   { id: 'sizing', title: 'Market Sizing', blurb: 'Classic guesstimate prompts with a structuring framework.', type: 'reveal', generate: genSizing },
 ];
 
-let practiceState = { moduleId: null, question: null, score: { correct: 0, total: 0 }, streak: 0, answered: false };
+let practiceState = { moduleId: null, question: null, score: 0, streak: 0, promptsReviewed: 0, durationSeconds: 60, remainingSeconds: 0, timerId: null, finished: false };
 
 function renderPracticeModules() {
   $('#practice-modules').innerHTML = PRACTICE_MODULES.map((m) => `<article class="practice-module-card" data-practice-module="${m.id}"><h3>${m.title}</h3><p>${m.blurb}</p><span class="text-button">Start <span>→</span></span></article>`).join('');
 }
 
+function currentPracticeModule() {
+  return PRACTICE_MODULES.find((m) => m.id === practiceState.moduleId);
+}
+
 function startPracticeModule(moduleId) {
-  practiceState = { moduleId, question: null, score: { correct: 0, total: 0 }, streak: 0, answered: false };
+  clearInterval(practiceState.timerId);
+  practiceState = { moduleId, question: null, score: 0, streak: 0, promptsReviewed: 0, durationSeconds: 60, remainingSeconds: 0, timerId: null, finished: false };
   $('#practice-modules').hidden = true;
   $('#practice-active').hidden = false;
-  const module = PRACTICE_MODULES.find((m) => m.id === moduleId);
+  $('#practice-duration-picker').hidden = false;
+  $('#practice-session').hidden = true;
+  const module = currentPracticeModule();
   $('#practice-active-label').textContent = module.type === 'reveal' ? 'GUESSTIMATE' : 'DRILL';
   $('#practice-active-title').textContent = module.title;
-  nextPracticeQuestion();
 }
 
 function exitPracticeModule() {
+  clearInterval(practiceState.timerId);
   $('#practice-active').hidden = true;
   $('#practice-modules').hidden = false;
 }
 
+function beginPracticeSession(durationSeconds) {
+  clearInterval(practiceState.timerId);
+  practiceState.durationSeconds = durationSeconds;
+  practiceState.remainingSeconds = durationSeconds;
+  practiceState.score = 0;
+  practiceState.streak = 0;
+  practiceState.promptsReviewed = 0;
+  practiceState.finished = false;
+
+  const module = currentPracticeModule();
+  $('#practice-duration-picker').hidden = true;
+  $('#practice-session').hidden = false;
+  $('#practice-question-card').hidden = false;
+  $('#practice-results').hidden = true;
+  $('#practice-score-stat').hidden = module.type === 'reveal';
+  $('#practice-streak-stat').hidden = module.type === 'reveal';
+  $('#practice-prompts-stat').hidden = module.type !== 'reveal';
+
+  renderPracticeTimer();
+  practiceState.timerId = setInterval(() => {
+    practiceState.remainingSeconds -= 1;
+    renderPracticeTimer();
+    if (practiceState.remainingSeconds <= 0) finishPracticeSession();
+  }, 1000);
+
+  nextPracticeQuestion();
+}
+
+function renderPracticeTimer() {
+  const seconds = Math.max(0, practiceState.remainingSeconds);
+  $('#practice-timer').textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  $('.practice-stats').classList.toggle('time-low', seconds <= 10);
+}
+
 function nextPracticeQuestion() {
-  const module = PRACTICE_MODULES.find((m) => m.id === practiceState.moduleId);
+  if (practiceState.finished) return;
+  const module = currentPracticeModule();
   practiceState.question = module.generate();
-  practiceState.answered = false;
   $('#practice-question').textContent = practiceState.question.prompt;
   const feedback = $('#practice-feedback');
   feedback.textContent = '';
@@ -600,6 +648,7 @@ function nextPracticeQuestion() {
   $('#practice-reveal').hidden = true;
   $('#practice-reveal').textContent = '';
   if (module.type === 'reveal') {
+    practiceState.promptsReviewed += 1;
     $('#practice-answer-row').hidden = true;
     $('#practice-reveal-controls').hidden = false;
   } else {
@@ -609,37 +658,54 @@ function nextPracticeQuestion() {
     input.value = '';
     input.disabled = false;
     input.focus();
-    $('#practice-submit-button').textContent = 'Check';
   }
   renderPracticeStats();
 }
 
 function renderPracticeStats() {
-  $('#practice-score').textContent = `${practiceState.score.correct}/${practiceState.score.total}`;
-  $('#practice-streak').textContent = practiceState.streak;
+  $('#practice-score').textContent = String(practiceState.score);
+  $('#practice-streak').textContent = String(practiceState.streak);
+  $('#practice-prompts').textContent = String(practiceState.promptsReviewed);
 }
 
 function handlePracticeSubmit() {
-  if (practiceState.answered) { nextPracticeQuestion(); return; }
+  if (practiceState.finished) return;
   const input = $('#practice-answer-input');
   const value = input.value.trim();
   if (!value) { showToast('Enter an answer first'); return; }
-  const question = practiceState.question;
-  const correct = question.checkAnswer(value);
-  practiceState.answered = true;
-  practiceState.score.total += 1;
-  if (correct) { practiceState.score.correct += 1; practiceState.streak += 1; } else { practiceState.streak = 0; }
-  const feedback = $('#practice-feedback');
-  feedback.textContent = correct ? '✓ Correct' : `✗ Not quite -- the answer was ${question.answerDisplay}`;
-  feedback.className = `practice-feedback ${correct ? 'correct' : 'incorrect'}`;
-  input.disabled = true;
-  $('#practice-submit-button').textContent = 'Next →';
-  renderPracticeStats();
+  const correct = practiceState.question.checkAnswer(value);
+  if (correct) {
+    practiceState.score += 1;
+    practiceState.streak += 1;
+    renderPracticeStats();
+    nextPracticeQuestion();
+  } else {
+    practiceState.streak = 0;
+    renderPracticeStats();
+    input.classList.remove('shake');
+    void input.offsetWidth;
+    input.classList.add('shake');
+    input.value = '';
+    input.focus();
+  }
 }
 
 function handlePracticeReveal() {
   $('#practice-reveal').hidden = false;
   $('#practice-reveal').textContent = practiceState.question.reveal;
+}
+
+function finishPracticeSession() {
+  clearInterval(practiceState.timerId);
+  practiceState.finished = true;
+  const module = currentPracticeModule();
+  $('#practice-question-card').hidden = true;
+  $('#practice-results').hidden = false;
+  const minutes = practiceState.durationSeconds / 60;
+  const durationLabel = minutes >= 1 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${practiceState.durationSeconds} seconds`;
+  $('#practice-results-summary').textContent = module.type === 'reveal'
+    ? `You reviewed ${practiceState.promptsReviewed} prompt${practiceState.promptsReviewed === 1 ? '' : 's'} in ${durationLabel}.`
+    : `You solved ${practiceState.score} problem${practiceState.score === 1 ? '' : 's'} in ${durationLabel}.`;
 }
 
 async function boot() {

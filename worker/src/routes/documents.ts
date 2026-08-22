@@ -46,7 +46,7 @@ documentsRoutes.post("/", async (c) => {
     return c.json({ error: "file and doc_type are required" }, 400);
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    return c.json({ error: "file exceeds 10MB limit" }, 413);
+    return c.json({ error: "file exceeds 2MB limit" }, 413);
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
