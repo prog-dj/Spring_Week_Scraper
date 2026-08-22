@@ -21,6 +21,13 @@ export async function listDocuments(env: Env, userId: number): Promise<DocumentR
   return results;
 }
 
+export async function countDocuments(env: Env, userId: number): Promise<number> {
+  const row = await env.DB.prepare("SELECT COUNT(*) AS count FROM documents WHERE user_id = ?")
+    .bind(userId)
+    .first<{ count: number }>();
+  return row?.count ?? 0;
+}
+
 export async function getDocument(env: Env, userId: number, documentId: number): Promise<DocumentRow | null> {
   const row = await env.DB.prepare("SELECT * FROM documents WHERE user_id = ? AND id = ?")
     .bind(userId, documentId)

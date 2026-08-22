@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../types";
-import { createDocument, deleteDocument, getDocument, listDocuments } from "../db/documents";
+import { countDocuments, createDocument, deleteDocument, getDocument, listDocuments } from "../db/documents";
 import { validateUploadedFile, sanitizeFilename, MAX_UPLOAD_BYTES } from "../storage/fileValidation";
 import { checkRateLimit } from "../storage/rateLimit";
+
+const MAX_DOCUMENTS_PER_USER = 5;
 
 export const documentsRoutes = new Hono<HonoEnv>({ strict: false });
 
@@ -30,6 +32,11 @@ documentsRoutes.post("/", async (c) => {
   const contentType = c.req.header("Content-Type") || "";
   if (!contentType.includes("multipart/form-data")) {
     return c.json({ error: "expected multipart/form-data upload" }, 400);
+  }
+
+  const existingCount = await countDocuments(c.env, user.id);
+  if (existingCount >= MAX_DOCUMENTS_PER_USER) {
+    return c.json({ error: `you can only store up to ${MAX_DOCUMENTS_PER_USER} documents -- delete one first` }, 400);
   }
 
   const form = await c.req.formData();
