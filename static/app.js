@@ -353,6 +353,7 @@ function bindEvents() {
     const save = event.target.closest('[data-save]'); if (save) toggleSaved(save.dataset.save);
     const apply = event.target.closest('[data-apply]'); if (apply) openOpportunity(apply.dataset.apply);
     const cycle = event.target.closest('[data-cycle]'); if (cycle) cycleApplication(cycle.dataset.cycle);
+    const practiceModule = event.target.closest('[data-practice-module]'); if (practiceModule) startPracticeModule(practiceModule.dataset.practiceModule);
     const deleteDoc = event.target.closest('[data-document-delete]');
     if (deleteDoc) {
       const id = deleteDoc.dataset.documentDelete;
@@ -382,6 +383,263 @@ function bindEvents() {
     }
   });
   document.addEventListener('click', (event) => { if (event.target.id === 'help-close') closeModal(); });
+  $('#practice-exit-button').addEventListener('click', exitPracticeModule);
+  $('#practice-submit-button').addEventListener('click', handlePracticeSubmit);
+  $('#practice-skip-button').addEventListener('click', () => nextPracticeQuestion());
+  $('#practice-reveal-button').addEventListener('click', handlePracticeReveal);
+  $('#practice-next-prompt-button').addEventListener('click', () => nextPracticeQuestion());
+  $('#practice-answer-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handlePracticeSubmit(); } });
+}
+
+// --- Practice Studio: randomly generated quant/finance drills, entirely client-side --------
+const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const pick = (arr) => arr[randInt(0, arr.length - 1)];
+const roundTo = (num, decimals = 0) => { const f = 10 ** decimals; return Math.round(num * f) / f; };
+const formatNum = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, ''));
+function factorial(n) { let r = 1; for (let i = 2; i <= n; i += 1) r *= i; return r; }
+function comb(n, k) { return factorial(n) / (factorial(k) * factorial(n - k)); }
+
+function genArithmetic() {
+  const op = pick(['+', '−', '×', '÷']);
+  let a, b, answer;
+  if (op === '+') { a = randInt(23, 987); b = randInt(23, 987); answer = a + b; }
+  else if (op === '−') { a = randInt(50, 987); b = randInt(10, a); answer = a - b; }
+  else if (op === '×') { a = randInt(11, 99); b = randInt(2, 19); answer = a * b; }
+  else { b = randInt(2, 19); answer = randInt(4, 60); a = b * answer; }
+  return {
+    prompt: `${a} ${op} ${b} = ?`,
+    checkAnswer: (input) => Math.round(Number(input)) === answer,
+    answerDisplay: String(answer),
+  };
+}
+
+const PERCENT_VALUES = [5, 10, 12.5, 15, 20, 25, 30, 33, 40, 50, 60, 66, 70, 75, 80, 90];
+function genPercentages() {
+  const kind = pick(['of', 'change', 'compound']);
+  if (kind === 'of') {
+    const pct = pick(PERCENT_VALUES);
+    const base = randInt(4, 500) * 4;
+    const answer = roundTo((base * pct) / 100, 1);
+    return {
+      prompt: `What is ${pct}% of ${base}?`,
+      checkAnswer: (input) => Math.abs(Number(input) - answer) <= Math.max(1, Math.abs(answer) * 0.02),
+      answerDisplay: formatNum(answer),
+    };
+  }
+  if (kind === 'change') {
+    const start = randInt(40, 600);
+    const pct = pick([-50, -40, -30, -25, -20, -15, -10, -5, 5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 100]);
+    const end = Math.round(start * (1 + pct / 100));
+    const answer = roundTo(((end - start) / start) * 100, 0);
+    return {
+      prompt: `A metric moves from ${start} to ${end}. What's the percentage change? (nearest whole %, use − for a decrease)`,
+      checkAnswer: (input) => Math.abs(Number(input) - answer) <= 1,
+      answerDisplay: `${answer > 0 ? '+' : ''}${answer}%`,
+    };
+  }
+  const price = randInt(20, 300);
+  const upPct = pick([5, 10, 15, 20, 25, 30]);
+  const downPct = pick([5, 10, 15, 20, 25, 30]);
+  const final = roundTo(price * (1 + upPct / 100) * (1 - downPct / 100), 2);
+  return {
+    prompt: `A stock trading at $${price} rises ${upPct}%, then falls ${downPct}%. What's the final price? (nearest dollar is fine)`,
+    checkAnswer: (input) => Math.abs(Number(input) - final) <= Math.max(1, final * 0.01),
+    answerDisplay: `$${formatNum(final)}`,
+  };
+}
+
+const DICE_SUM_COUNTS = { 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1 };
+const CARD_SCENARIOS = [
+  { label: 'a King', count: 4 },
+  { label: 'a heart', count: 13 },
+  { label: 'a red card', count: 26 },
+  { label: 'a face card (J, Q, or K)', count: 12 },
+  { label: 'an Ace', count: 4 },
+  { label: 'a black Queen', count: 2 },
+];
+function genProbability() {
+  const kind = pick(['dice', 'coins', 'cards', 'ev']);
+  if (kind === 'dice') {
+    const sum = randInt(2, 12);
+    const answer = roundTo((DICE_SUM_COUNTS[sum] / 36) * 100, 1);
+    return {
+      prompt: `You roll two fair six-sided dice. What's the probability their sum equals ${sum}? (as a %, nearest whole number is fine)`,
+      checkAnswer: (input) => Math.abs(Number(input) - answer) <= 1,
+      answerDisplay: `${answer}% (${DICE_SUM_COUNTS[sum]}/36)`,
+    };
+  }
+  if (kind === 'coins') {
+    const n = pick([3, 4, 5]);
+    const k = randInt(Math.ceil(n / 2), n);
+    let favourable = 0;
+    for (let h = k; h <= n; h += 1) favourable += comb(n, h);
+    const answer = roundTo((favourable / 2 ** n) * 100, 1);
+    return {
+      prompt: `You flip a fair coin ${n} times. What's the probability of getting at least ${k} heads? (as a %, nearest whole number is fine)`,
+      checkAnswer: (input) => Math.abs(Number(input) - answer) <= 1,
+      answerDisplay: `${answer}%`,
+    };
+  }
+  if (kind === 'cards') {
+    const scenario = pick(CARD_SCENARIOS);
+    const answer = roundTo((scenario.count / 52) * 100, 1);
+    return {
+      prompt: `You draw one card from a standard 52-card deck. What's the probability it's ${scenario.label}? (as a %, nearest whole number is fine)`,
+      checkAnswer: (input) => Math.abs(Number(input) - answer) <= 1,
+      answerDisplay: `${answer}% (${scenario.count}/52)`,
+    };
+  }
+  const win = randInt(10, 200);
+  const lose = randInt(10, 200);
+  const probPct = pick([10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90]);
+  const ev = roundTo((probPct / 100) * win - (1 - probPct / 100) * lose, 2);
+  return {
+    prompt: `A game pays $${win} with probability ${probPct}%, and otherwise costs you $${lose}. What's the expected value? (use − for a negative EV)`,
+    checkAnswer: (input) => Math.abs(Number(input) - ev) <= Math.max(1, Math.abs(ev) * 0.05 + 0.5),
+    answerDisplay: `$${formatNum(ev)}`,
+  };
+}
+
+function genSequence() {
+  const kind = pick(['arithmetic', 'geometric', 'quadratic', 'fibonacci']);
+  let terms = [];
+  let next;
+  if (kind === 'arithmetic') {
+    const start = randInt(1, 20);
+    const d = pick([-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8]);
+    terms = Array.from({ length: 5 }, (_, i) => start + d * i);
+    next = start + d * 5;
+  } else if (kind === 'geometric') {
+    const start = randInt(1, 5);
+    const r = pick([2, 3, -2]);
+    terms = Array.from({ length: 5 }, (_, i) => start * r ** i);
+    next = start * r ** 5;
+  } else if (kind === 'quadratic') {
+    const start = randInt(1, 10);
+    let diff = randInt(1, 5);
+    const step = randInt(1, 4);
+    terms = [start];
+    for (let i = 1; i < 5; i += 1) { terms.push(terms[i - 1] + diff); diff += step; }
+    next = terms[4] + diff;
+  } else {
+    terms = [randInt(1, 6), randInt(1, 6)];
+    for (let i = 2; i < 5; i += 1) terms.push(terms[i - 1] + terms[i - 2]);
+    next = terms[4] + terms[3];
+  }
+  return {
+    prompt: `${terms.join(', ')}, ?`,
+    checkAnswer: (input) => Number(input) === next,
+    answerDisplay: String(next),
+  };
+}
+
+const SIZING_PROMPTS = [
+  'Estimate the number of piano tuners in New York City.',
+  'How many golf balls would fit inside a school bus?',
+  'Estimate the annual revenue of a mid-sized Starbucks in central London.',
+  'How many weddings take place in the UK each year?',
+  'Estimate the number of Ubers operating in London on a Friday night.',
+  'How many pizzas are ordered in the UK on a Saturday night?',
+  'Estimate the size of the UK online food-delivery market.',
+  'How many smartphones are sold globally each year?',
+  'Estimate the number of petrol stations in the UK.',
+  'How many people fly through Heathrow Airport in a year?',
+  'Estimate the number of investment bankers working in the City of London.',
+  'How many books are sold in the UK each year?',
+  'Estimate the number of coffee cups sold daily in central London.',
+  'How many cars are on the road in London at 8am on a weekday?',
+  'Estimate the size of the UK private-tutoring market.',
+];
+const SIZING_FRAMEWORK = `1. Clarify scope -- geography, timeframe, definitions.
+2. Pick an approach -- top-down (start from a known total, narrow down) or bottom-up (build from one unit, scale up).
+3. Break it into 3-5 driving factors and state a reasonable assumption for each.
+4. Work the maths step by step, out loud.
+5. Sanity-check against something you know, and round to a sensible order of magnitude.
+6. Give your answer as a range, and flag the assumption you're least sure about.`;
+function genSizing() {
+  return { prompt: pick(SIZING_PROMPTS), reveal: SIZING_FRAMEWORK };
+}
+
+const PRACTICE_MODULES = [
+  { id: 'arithmetic', title: 'Mental Arithmetic', blurb: '+, −, ×, ÷ under pressure. No calculator.', type: 'numeric', generate: genArithmetic },
+  { id: 'percentages', title: 'Percentages & Ratios', blurb: 'Percent-of, percent-change, and compounding moves.', type: 'numeric', generate: genPercentages },
+  { id: 'probability', title: 'Probability & EV', blurb: 'Dice, coins, cards, and expected value.', type: 'numeric', generate: genProbability },
+  { id: 'sequences', title: 'Number Sequences', blurb: 'Spot the pattern, name the next term.', type: 'numeric', generate: genSequence },
+  { id: 'sizing', title: 'Market Sizing', blurb: 'Classic guesstimate prompts with a structuring framework.', type: 'reveal', generate: genSizing },
+];
+
+let practiceState = { moduleId: null, question: null, score: { correct: 0, total: 0 }, streak: 0, answered: false };
+
+function renderPracticeModules() {
+  $('#practice-modules').innerHTML = PRACTICE_MODULES.map((m) => `<article class="practice-module-card" data-practice-module="${m.id}"><h3>${m.title}</h3><p>${m.blurb}</p><span class="text-button">Start <span>→</span></span></article>`).join('');
+}
+
+function startPracticeModule(moduleId) {
+  practiceState = { moduleId, question: null, score: { correct: 0, total: 0 }, streak: 0, answered: false };
+  $('#practice-modules').hidden = true;
+  $('#practice-active').hidden = false;
+  const module = PRACTICE_MODULES.find((m) => m.id === moduleId);
+  $('#practice-active-label').textContent = module.type === 'reveal' ? 'GUESSTIMATE' : 'DRILL';
+  $('#practice-active-title').textContent = module.title;
+  nextPracticeQuestion();
+}
+
+function exitPracticeModule() {
+  $('#practice-active').hidden = true;
+  $('#practice-modules').hidden = false;
+}
+
+function nextPracticeQuestion() {
+  const module = PRACTICE_MODULES.find((m) => m.id === practiceState.moduleId);
+  practiceState.question = module.generate();
+  practiceState.answered = false;
+  $('#practice-question').textContent = practiceState.question.prompt;
+  const feedback = $('#practice-feedback');
+  feedback.textContent = '';
+  feedback.className = 'practice-feedback';
+  $('#practice-reveal').hidden = true;
+  $('#practice-reveal').textContent = '';
+  if (module.type === 'reveal') {
+    $('#practice-answer-row').hidden = true;
+    $('#practice-reveal-controls').hidden = false;
+  } else {
+    $('#practice-answer-row').hidden = false;
+    $('#practice-reveal-controls').hidden = true;
+    const input = $('#practice-answer-input');
+    input.value = '';
+    input.disabled = false;
+    input.focus();
+    $('#practice-submit-button').textContent = 'Check';
+  }
+  renderPracticeStats();
+}
+
+function renderPracticeStats() {
+  $('#practice-score').textContent = `${practiceState.score.correct}/${practiceState.score.total}`;
+  $('#practice-streak').textContent = practiceState.streak;
+}
+
+function handlePracticeSubmit() {
+  if (practiceState.answered) { nextPracticeQuestion(); return; }
+  const input = $('#practice-answer-input');
+  const value = input.value.trim();
+  if (!value) { showToast('Enter an answer first'); return; }
+  const question = practiceState.question;
+  const correct = question.checkAnswer(value);
+  practiceState.answered = true;
+  practiceState.score.total += 1;
+  if (correct) { practiceState.score.correct += 1; practiceState.streak += 1; } else { practiceState.streak = 0; }
+  const feedback = $('#practice-feedback');
+  feedback.textContent = correct ? '✓ Correct' : `✗ Not quite -- the answer was ${question.answerDisplay}`;
+  feedback.className = `practice-feedback ${correct ? 'correct' : 'incorrect'}`;
+  input.disabled = true;
+  $('#practice-submit-button').textContent = 'Next →';
+  renderPracticeStats();
+}
+
+function handlePracticeReveal() {
+  $('#practice-reveal').hidden = false;
+  $('#practice-reveal').textContent = practiceState.question.reveal;
 }
 
 async function boot() {
@@ -390,7 +648,7 @@ async function boot() {
   const user = await loadSession();
   applyProfileToDom();
   if (user) await loadUserState();
-  renderOverview(); renderOpportunities(); renderApplications(); renderDocuments(); bindEvents();
+  renderOverview(); renderOpportunities(); renderApplications(); renderDocuments(); renderPracticeModules(); bindEvents();
   loadOpportunities();
 }
 

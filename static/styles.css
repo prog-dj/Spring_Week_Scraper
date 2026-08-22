@@ -347,11 +347,28 @@ h1, h2, h3, p { margin: 0; }
    PRACTICE STUDIO
    ========================================================================= */
 
-.practice-layout { display: block; }
-.practice-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 28px; }
 .practice-label { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 0.7px; }
-.practice-card h2 { font: 600 18px var(--font); margin: 10px 0; max-width: 44ch; }
-.practice-card > p { color: var(--ink-secondary); line-height: 1.6; max-width: 56ch; }
+
+.practice-modules { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.practice-module-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; padding: 18px; transition: border-color 0.12s ease, transform 0.12s ease; }
+.practice-module-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.practice-module-card h3 { font: 600 14px var(--font); margin: 0 0 6px; }
+.practice-module-card p { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0 0 14px; }
+.practice-module-card .text-button { font-size: 11px; pointer-events: none; }
+
+.practice-active-header { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 14px; }
+.practice-active-header h2 { font: 600 18px var(--font); margin: 6px 0 0; max-width: 44ch; }
+.practice-stats { color: var(--muted); display: flex; font-size: 11px; gap: 18px; margin-bottom: 16px; }
+.practice-stats strong { color: var(--ink); font-weight: 700; margin-left: 5px; }
+.practice-question-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 26px; }
+.practice-question { font: 600 20px var(--font); letter-spacing: -0.2px; margin: 0 0 20px; white-space: pre-line; }
+.practice-answer-row, .practice-reveal-controls { display: flex; gap: 8px; }
+.practice-answer-input { background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--ink); flex: 1; font-size: 14px; min-width: 0; padding: 10px 12px; }
+.practice-answer-input:focus { border-color: var(--accent); outline: none; }
+.practice-feedback { font-size: 12px; font-weight: 600; margin: 14px 0 0; min-height: 16px; }
+.practice-feedback.correct { color: var(--green); }
+.practice-feedback.incorrect { color: var(--red); }
+.practice-reveal { background: var(--accent-subtle); border-radius: var(--radius-sm); color: var(--accent-ink); font: 400 12px/1.6 var(--font); margin: 14px 0 0; padding: 14px; white-space: pre-wrap; }
 
 /* =========================================================================
    DOCUMENTS

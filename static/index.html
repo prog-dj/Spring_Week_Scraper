@@ -77,8 +77,29 @@
       </section>
 
       <section class="view" id="practice-view">
-        <div class="page-intro"><div><div class="eyebrow">PRACTICE STUDIO</div><h1>Rehearse the real thing.</h1><p>Short, focused drills for OAs, interviews, and the written parts of your application.</p></div></div>
-        <div class="practice-layout"><div class="practice-main"><article class="practice-card"><span class="practice-label">COMING SOON</span><h2>OA drills, interview practice, and cover-letter feedback are on the way.</h2><p>This section isn't built yet, so nothing here is real practice content. Check back soon.</p></article></div></div>
+        <div class="page-intro"><div><div class="eyebrow">PRACTICE STUDIO</div><h1>Rehearse the real thing.</h1><p>Randomly generated drills for OA-style quant reasoning and finance-interview mental math. Practice as many rounds as you want.</p></div></div>
+        <div class="practice-modules" id="practice-modules"></div>
+        <div class="practice-active" id="practice-active" hidden>
+          <div class="practice-active-header">
+            <div><span class="practice-label" id="practice-active-label">DRILL</span><h2 id="practice-active-title"></h2></div>
+            <button class="text-button" id="practice-exit-button">← All drills</button>
+          </div>
+          <div class="practice-stats"><span>Score<strong id="practice-score">0/0</strong></span><span>Streak<strong id="practice-streak">0</strong></span></div>
+          <div class="practice-question-card">
+            <p class="practice-question" id="practice-question"></p>
+            <div class="practice-answer-row" id="practice-answer-row">
+              <input class="practice-answer-input" id="practice-answer-input" type="text" inputmode="decimal" placeholder="Your answer" autocomplete="off" />
+              <button class="primary-button" id="practice-submit-button">Check</button>
+              <button class="secondary-button" id="practice-skip-button">Skip</button>
+            </div>
+            <div class="practice-reveal-controls" id="practice-reveal-controls" hidden>
+              <button class="primary-button" id="practice-reveal-button">Show structuring framework</button>
+              <button class="secondary-button" id="practice-next-prompt-button">Next prompt</button>
+            </div>
+            <p class="practice-feedback" id="practice-feedback"></p>
+            <pre class="practice-reveal" id="practice-reveal" hidden></pre>
+          </div>
+        </div>
       </section>
 
       <section class="view" id="documents-view">
