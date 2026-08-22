@@ -2,9 +2,13 @@ name: Scrape opportunities
 
 on:
   schedule:
-    # Every 6 hours. GitHub's scheduler is best-effort and can lag during high
-    # load, so treat this as "roughly every 6 hours," not exact.
-    - cron: "0 */6 * * *"
+    # Twice daily, fixed to GMT (UTC+0) year-round -- 00:02 and 09:10 GMT.
+    # cron is always UTC and doesn't shift for BST, so these stay pinned to
+    # GMT clock time even during British Summer Time (an hour earlier than
+    # 9:10/12:02 local in the summer). GitHub's scheduler is best-effort and
+    # can lag a few minutes during high load.
+    - cron: "2 0 * * *"
+    - cron: "10 9 * * *"
   workflow_dispatch: {} # lets an admin trigger a run early from the Worker's /api/discover, or manually from the Actions tab
 
 jobs:

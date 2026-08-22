@@ -95,9 +95,9 @@ In your GitHub repo → Settings → Secrets and variables → Actions, add:
 - `SPRINGR_INGEST_SECRET` — same value as `INGEST_SHARED_SECRET` in step 6
 - `SERPER_API_KEY` — your [Serper.dev](https://serper.dev) API key
 
-The workflow (`.github/workflows/scrape.yml`) runs every 6 hours automatically
-once these secrets exist — no further setup needed. You can also trigger it
-manually from the repo's Actions tab (`Run workflow`).
+The workflow (`.github/workflows/scrape.yml`) runs automatically twice a day
+(00:02 and 09:10 GMT) once these secrets exist — no further setup needed. You
+can also trigger it manually from the repo's Actions tab (`Run workflow`).
 
 ## 9. Sentry (optional, recommended)
 
@@ -134,5 +134,5 @@ SPRINGR_WORKER_URL=http://127.0.0.1:8787 SPRINGR_INGEST_SECRET=<same as wrangler
 - **D1**: 5GB storage, 5M row reads/day free
 - **R2**: 10GB storage, zero egress fees, free
 - **GitHub Actions**: 2,000 min/month free (private repo) — a scrape run takes
-  a few minutes, so 6-hourly runs use a small fraction of that
+  a few minutes, so two runs a day use a small fraction of that
 - **Sentry**: 5,000 errors/month free tier
