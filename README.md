@@ -30,6 +30,8 @@ Every discovered opportunity is stored in SQLite (`springboard.db`) with its sou
 
 The verifier only extracts a deadline or acceptance percentage when it finds explicit supporting text. It does not estimate acceptance rates from unrelated admissions or hiring data. When a source blocks requests, moves, times out, or does not state a field, the UI shows that field as unavailable.
 
+The dashboard opportunity modal includes the evidence excerpt, confidence, source type, programme dates, suggested preparation tags, official source link, and recorded status history. Optional email alerts are sent when a stored opportunity changes status if `SMTP_HOST` and `ALERT_TO` are configured.
+
 Career sites change their URLs and may block automated requests. For production use, review each source against its terms and robots policy, add rate limiting and monitoring, and move SQLite to PostgreSQL when deploying multiple workers.
 
 Application selections and document records are currently stored in browser `localStorage` so the workflow is easy to test locally.

@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import smtplib
 import sqlite3
 import threading
 import time
 from datetime import date, datetime, timezone
+from email.message import EmailMessage
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -29,6 +31,9 @@ SEARCH_QUERIES = [
     "UK spring insight programme applications",
     "UK insight week students applications",
     "UK first year insight programme applications",
+    "UK early careers insight programme applications",
+    "UK student insight event applications",
+    "UK technology law engineering spring insight applications",
 ]
 USER_AGENT = "SpringboardOpportunityResearch/2.0 (+local student careers tool)"
 REQUEST_TIMEOUT = 15
@@ -70,6 +75,13 @@ def init_db() -> None:
             error TEXT
         );
         """)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(opportunities)")}
+        if "source_type" not in columns:
+            connection.execute("ALTER TABLE opportunities ADD COLUMN source_type TEXT NOT NULL DEFAULT 'unknown'")
+        if "evidence_excerpt" not in columns:
+            connection.execute("ALTER TABLE opportunities ADD COLUMN evidence_excerpt TEXT")
+        if "prep_tags" not in columns:
+            connection.execute("ALTER TABLE opportunities ADD COLUMN prep_tags TEXT")
 
 
 def stable_id(url: str) -> str:
@@ -99,6 +111,15 @@ def is_opportunity_candidate(result: dict) -> bool:
     excluded = ("reddit.com", "targetjobs.co.uk", "brightnetwork.co.uk", "higherin.com", "e4s.co.uk", "fe.training", "tracker", "calendar", "guide", "what is", "how do you get", "complete guide", "free resources")
     link = result.get("link", "").lower()
     return any(term in haystack for term in terms) and not any(term in f"{link} {haystack}" for term in excluded)
+
+
+def source_type(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    if any(term in host for term in ("reddit.", "brightnetwork.", "targetjobs.", "higherin.", "e4s.", "fe.training", "trackr.")):
+        return "aggregator"
+    if "career" in host or any(term in url.lower() for term in ("/careers", "/jobs", "/early-careers", "/students", "/graduates")):
+        return "employer"
+    return "unknown"
 
 
 def search_serper() -> list[dict]:
@@ -214,10 +235,29 @@ def render_with_playwright(url: str) -> str | None:
         finally:
             browser.close()
 
+    def prep_tags(text: str) -> list[str]:
+        lowered = text.lower()
+        if any(term in lowered for term in ("law", "legal", "solicitor")):
+            return ["commercial awareness", "case study", "motivation"]
+        if any(term in lowered for term in ("technology", "engineering", "software", "step")):
+            return ["technical OA", "behavioural interview", "motivation"]
+        return ["motivation", "commercial awareness", "numerical OA"]
+
+
+def evidence_excerpt(text: str, status: str, deadline: str | None) -> str:
+    phrases = [deadline, "applications closed", "apply now", "applications are open", "opening soon", "will open"]
+    lowered = text.lower()
+    for phrase in phrases:
+        if phrase:
+            index = lowered.find(phrase.lower())
+            if index >= 0:
+                return text[max(0, index - 90):index + 180].strip()
+    return f"No direct status phrase found; classified as {status}."
+
 
 def verify_candidate(candidate: dict) -> dict:
     checked_at = utc_now()
-    base = {"id": stable_id(candidate["url"]), "company": extract_company(candidate.get("title", ""), candidate["url"]), "programme": extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": infer_sector(candidate.get("title", "")), "location": None, "opportunity_url": candidate["url"], "source_url": candidate["url"], "discovered_via": candidate["discovered_via"], "deadline": None, "programme_dates": None, "status": "unknown", "confidence": "low", "evidence": "Source could not be verified", "acceptance_rate": None, "perks": None, "http_status": None, "checked_at": checked_at, "last_error": None, "logo": "?", "logo_class": "", "opportunity_type": "Insight programme"}
+    base = {"id": stable_id(candidate["url"]), "company": extract_company(candidate.get("title", ""), candidate["url"]), "programme": extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": infer_sector(candidate.get("title", "")), "location": None, "opportunity_url": candidate["url"], "source_url": candidate["url"], "discovered_via": candidate["discovered_via"], "deadline": None, "programme_dates": None, "status": "unknown", "confidence": "low", "evidence": "Source could not be verified", "evidence_excerpt": None, "acceptance_rate": None, "perks": None, "http_status": None, "checked_at": checked_at, "last_error": None, "logo": "?", "logo_class": "", "opportunity_type": "Insight programme", "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(candidate.get("title", "")))}
     try:
         response = requests.get(candidate["url"], headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
         base["http_status"] = response.status_code
@@ -231,7 +271,7 @@ def verify_candidate(candidate: dict) -> dict:
         deadline = extract_deadline(text)
         programme_dates = extract_programme_dates(text)
         status, evidence, confidence = classify_status(text, deadline, programme_dates)
-        base.update({"company": extract_company(candidate.get("title", ""), candidate["url"]), "programme": extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": infer_sector(f"{candidate.get('title', '')} {text}"), "location": infer_location(text), "deadline": deadline, "programme_dates": programme_dates, "status": status, "confidence": confidence, "evidence": evidence, "acceptance_rate": extract_acceptance_rate(text), "perks": extract_perks(text), "logo": extract_company(candidate.get("title", ""), candidate["url"])[:3].upper(), "logo_class": sector_logo_class(infer_sector(candidate.get("title", "")))})
+        base.update({"company": extract_company(candidate.get("title", ""), candidate["url"]), "programme": extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": infer_sector(f"{candidate.get('title', '')} {text}"), "location": infer_location(text), "deadline": deadline, "programme_dates": programme_dates, "status": status, "confidence": confidence, "evidence": evidence, "evidence_excerpt": evidence_excerpt(text, status, deadline), "acceptance_rate": extract_acceptance_rate(text), "perks": extract_perks(text), "logo": extract_company(candidate.get("title", ""), candidate["url"])[:3].upper(), "logo_class": sector_logo_class(infer_sector(candidate.get("title", ""))), "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(f"{candidate.get('title', '')} {text}"))})
         if response.status_code >= 400 and rendered_text is None:
             base.update({"status": "unknown", "confidence": "low", "evidence": f"Source returned HTTP {response.status_code}; page could not be verified"})
     except Exception as error:
@@ -242,11 +282,32 @@ def verify_candidate(candidate: dict) -> dict:
 def upsert_opportunity(item: dict) -> None:
     with db_lock, db_connect() as connection:
         old = connection.execute("SELECT status FROM opportunities WHERE id = ?", (item["id"],)).fetchone()
-        connection.execute("""INSERT INTO opportunities (id, company, programme, sector, location, opportunity_url, source_url, discovered_via, deadline, programme_dates, status, confidence, evidence, acceptance_rate, perks, http_status, checked_at, last_error, logo, logo_class, opportunity_type)
-            VALUES (:id, :company, :programme, :sector, :location, :opportunity_url, :source_url, :discovered_via, :deadline, :programme_dates, :status, :confidence, :evidence, :acceptance_rate, :perks, :http_status, :checked_at, :last_error, :logo, :logo_class, :opportunity_type)
-            ON CONFLICT(id) DO UPDATE SET company=excluded.company, programme=excluded.programme, sector=excluded.sector, location=excluded.location, deadline=excluded.deadline, programme_dates=excluded.programme_dates, status=excluded.status, confidence=excluded.confidence, evidence=excluded.evidence, acceptance_rate=excluded.acceptance_rate, perks=excluded.perks, http_status=excluded.http_status, checked_at=excluded.checked_at, last_error=excluded.last_error, logo=excluded.logo, logo_class=excluded.logo_class, opportunity_type=excluded.opportunity_type""", item)
+        connection.execute("""INSERT INTO opportunities (id, company, programme, sector, location, opportunity_url, source_url, discovered_via, deadline, programme_dates, status, confidence, evidence, acceptance_rate, perks, http_status, checked_at, last_error, logo, logo_class, opportunity_type, source_type, evidence_excerpt, prep_tags)
+            VALUES (:id, :company, :programme, :sector, :location, :opportunity_url, :source_url, :discovered_via, :deadline, :programme_dates, :status, :confidence, :evidence, :acceptance_rate, :perks, :http_status, :checked_at, :last_error, :logo, :logo_class, :opportunity_type, :source_type, :evidence_excerpt, :prep_tags)
+            ON CONFLICT(id) DO UPDATE SET company=excluded.company, programme=excluded.programme, sector=excluded.sector, location=excluded.location, deadline=excluded.deadline, programme_dates=excluded.programme_dates, status=excluded.status, confidence=excluded.confidence, evidence=excluded.evidence, acceptance_rate=excluded.acceptance_rate, perks=excluded.perks, http_status=excluded.http_status, checked_at=excluded.checked_at, last_error=excluded.last_error, logo=excluded.logo, logo_class=excluded.logo_class, opportunity_type=excluded.opportunity_type, source_type=excluded.source_type, evidence_excerpt=excluded.evidence_excerpt, prep_tags=excluded.prep_tags""", item)
         if old is None or old["status"] != item["status"]:
             connection.execute("INSERT INTO status_history (opportunity_id, status, evidence, observed_at) VALUES (?, ?, ?, ?)", (item["id"], item["status"], item["evidence"], item["checked_at"]))
+            send_status_alert(item, old["status"] if old else None)
+
+
+def send_status_alert(item: dict, previous_status: str | None) -> None:
+    smtp_host = os.getenv("SMTP_HOST")
+    recipient = os.getenv("ALERT_TO")
+    if not smtp_host or not recipient:
+        return
+    message = EmailMessage()
+    message["Subject"] = f"Springboard status change: {item['company']} is {item['status']}"
+    message["From"] = os.getenv("ALERT_FROM", os.getenv("SMTP_USER", "springboard@localhost"))
+    message["To"] = recipient
+    message.set_content(f"{item['company']} - {item['programme']} changed from {previous_status or 'new'} to {item['status']}.\n\nEvidence: {item['evidence']}\nSource: {item['source_url']}\nChecked: {item['checked_at']}")
+    try:
+        with smtplib.SMTP(smtp_host, int(os.getenv("SMTP_PORT", "587")), timeout=15) as smtp:
+            smtp.starttls()
+            if os.getenv("SMTP_USER") and os.getenv("SMTP_PASSWORD"):
+                smtp.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
+            smtp.send_message(message)
+    except OSError:
+        pass
 
 
 def discover_and_refresh() -> dict:
@@ -312,7 +373,12 @@ class AppHandler(SimpleHTTPRequestHandler):
             self.send_json(discover_and_refresh())
         elif path == "/api/history":
             with db_lock, db_connect() as connection:
-                rows = connection.execute("SELECT * FROM status_history ORDER BY observed_at DESC LIMIT 200").fetchall()
+                query = urlparse(self.path).query
+                opportunity_id = dict(part.split("=", 1) for part in query.split("&") if "=" in part).get("opportunity_id")
+                if opportunity_id:
+                    rows = connection.execute("SELECT * FROM status_history WHERE opportunity_id = ? ORDER BY observed_at DESC LIMIT 50", (opportunity_id,)).fetchall()
+                else:
+                    rows = connection.execute("SELECT * FROM status_history ORDER BY observed_at DESC LIMIT 200").fetchall()
             self.send_json({"history": [dict(row) for row in rows]})
         else:
             super().do_GET()

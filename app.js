@@ -90,7 +90,7 @@ function navigate(viewName) {
 function renderOverview() {
   $('#saved-opportunities-stat').textContent = state.saved.length;
   $('#in-progress-stat').textContent = state.applications.filter((application) => application.status === 'In progress').length;
-  $('#closing-soon-stat').textContent = opportunityData.filter((item) => item.status === 'soon').length;
+  $('#closing-soon-stat').textContent = opportunityData.filter((item) => item.status === 'upcoming' || item.status === 'soon').length;
   $('#nav-application-count').textContent = state.applications.length;
   const timelineItems = state.applications.slice(0, 4).map((application, index) => {
     const opportunity = getOpportunity(application.id);
@@ -117,7 +117,7 @@ function renderOpportunities() {
   });
   $('#opportunity-grid').innerHTML = filtered.length ? filtered.map((item) => {
     const saved = state.saved.includes(item.id);
-    const statusLabel = item.status === 'soon' ? 'Closing soon' : item.status === 'open' ? 'Open now' : 'Status unknown';
+    const statusLabel = item.status === 'open' ? 'Open now' : item.status === 'upcoming' ? 'Upcoming' : item.status === 'closed' ? 'Closed' : item.status === 'finished' ? 'Finished' : 'Status unknown';
     return `<article class="opportunity-card"><div class="card-top"><div class="firm-line"><span class="firm-logo ${item.logoClass}">${item.logo}</span><div><strong>${item.firm}</strong><span>${item.sector}</span></div></div><button class="save-button ${saved ? 'saved' : ''}" data-save="${item.id}" aria-label="${saved ? 'Remove from saved' : 'Save'} ${item.firm}">${saved ? '♥' : '♡'}</button></div><h2>${item.role}</h2><span class="role">${item.type} · ${item.location}</span><div class="opportunity-facts"><div class="fact"><label>Acceptance rate</label><span class="unknown">${item.rate || 'Not published'}</span></div><div class="fact"><label>Data status</label><span>${item.source}</span></div><div class="fact"><label>Future perks</label><span>${item.perks || 'Not stated on source page'}</span></div><div class="fact"><label>Application</label><span>${statusLabel}</span></div></div><div class="card-bottom"><span class="deadline">Deadline: <strong>${item.deadline || 'Not published'}</strong></span><button class="small-button" data-apply="${item.id}">${state.applications.some((application) => opportunityIdAliases[application.id] === item.id || application.id === item.id) ? 'View application' : 'Track opportunity'}</button></div></article>`;
   }).join('') : '<div class="empty-state"><strong>No verified opportunities are available.</strong><p>Try Refresh data after checking that the local scraper server is running.</p></div>';
 }
@@ -159,7 +159,10 @@ function closeModal() { $('#modal-backdrop').hidden = true; }
 function openOpportunity(id) {
   const item = getOpportunity(id);
   const tracked = state.applications.find((application) => application.id === id);
-  openModal(`<span class="eyebrow">${item.sector.toUpperCase()}</span><h2>${item.firm}: ${item.role}</h2><p>${item.type} in ${item.location}. This record is based on the ${item.source.toLowerCase()}. Acceptance rate: <strong>${(item.rate || 'not published').toLowerCase()}</strong>. We will never infer a rate from unrelated data.</p><div class="modal-form"><div class="fact"><label>Future perks</label><span>${item.perks || 'Not stated on source page'}</span></div><div class="fact"><label>Application deadline</label><span>${item.deadline || 'Not published'}</span></div><a class="secondary-button" href="${item.url}" target="_blank" rel="noreferrer">Open official source ↗</a><button class="primary-button" id="modal-track">${tracked ? 'Open in applications' : 'Add to applications'} <span>→</span></button></div>`);
+  let tags = [];
+  try { tags = JSON.parse(item.prep_tags || '[]'); } catch (error) { tags = []; }
+  openModal(`<span class="eyebrow">${item.sector.toUpperCase()} · ${String(item.source_type || 'unknown').toUpperCase()} SOURCE</span><h2>${item.firm}: ${item.role}</h2><p>${item.type} in ${item.location || 'Location not published'}. Acceptance rate: <strong>${(item.rate || 'not published').toLowerCase()}</strong>. We never infer rates from unrelated data.</p><div class="modal-form"><div class="fact"><label>Application status</label><span>${item.status} · ${item.confidence} confidence</span></div><div class="fact"><label>Application deadline</label><span>${item.deadline || 'Not published'}</span></div><div class="fact"><label>Programme dates</label><span>${item.programme_dates || 'Not published'}</span></div><div class="fact"><label>Future perks</label><span>${item.perks || 'Not stated on source page'}</span></div><div class="fact"><label>Evidence</label><span>${item.evidence_excerpt || item.source}</span></div><div class="fact"><label>Suggested preparation</label><span>${tags.join(' · ') || 'General application preparation'}</span></div><a class="secondary-button" href="${item.url}" target="_blank" rel="noreferrer">Open official source ↗</a><button class="primary-button" id="modal-track">${tracked ? 'Open in applications' : 'Add to applications'} <span>→</span></button><div class="fact" id="history-panel"><label>Status history</label><span>Loading history…</span></div></div>`);
+  fetch(`/api/history?opportunity_id=${encodeURIComponent(item.id)}`).then((response) => response.json()).then((payload) => { const panel = $('#history-panel span'); if (panel) panel.textContent = payload.history?.length ? payload.history.map((entry) => `${entry.status} · ${new Date(entry.observed_at).toLocaleDateString()}`).join(' → ') : 'No previous status changes recorded'; }).catch(() => { const panel = $('#history-panel span'); if (panel) panel.textContent = 'History unavailable'; });
   $('#modal-track').addEventListener('click', () => { closeModal(); if (tracked) navigate('applications'); else trackApplication(id); });
 }
 function trackApplication(id) {
