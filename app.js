@@ -66,6 +66,14 @@ const saveState = () => {
   localStorage.setItem('springboard-applications', JSON.stringify(state.applications));
   localStorage.setItem('springboard-documents', JSON.stringify(state.documents));
 };
+function saveLocalFile(id, file) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('springboard-files', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('files');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => { const transaction = request.result.transaction('files', 'readwrite'); transaction.objectStore('files').put(file, id); transaction.oncomplete = resolve; transaction.onerror = () => reject(transaction.error); };
+  });
+}
 const showToast = (message) => {
   const toast = $('#toast');
   toast.textContent = message;
@@ -212,7 +220,7 @@ function bindEvents() {
   document.addEventListener('click', (event) => { const save = event.target.closest('[data-save]'); if (save) toggleSaved(save.dataset.save); const apply = event.target.closest('[data-apply]'); if (apply) openOpportunity(apply.dataset.apply); const cycle = event.target.closest('[data-cycle]'); if (cycle) cycleApplication(cycle.dataset.cycle); const doc = event.target.closest('[data-document]'); if (doc) showToast('Document actions are ready when file uploads are connected'); });
   $$('.practice-tab').forEach((tab) => tab.addEventListener('click', () => { $$('.practice-tab').forEach((item) => item.classList.remove('active')); tab.classList.add('active'); state.currentPractice = tab.dataset.practice; renderPractice(); }));
   $('#modal-close').addEventListener('click', closeModal); $('#modal-backdrop').addEventListener('click', (event) => { if (event.target.id === 'modal-backdrop') closeModal(); });
-  document.addEventListener('submit', (event) => { if (event.target.id === 'document-form') { event.preventDefault(); const form = new FormData(event.target); const file = form.get('file'); state.documents.push({ id: `doc-${Date.now()}`, name: form.get('name') || file.name, type: form.get('type'), size: file.size ? `${Math.ceil(file.size / 1024)} KB` : 'Local file', updated: 'Added just now', status: 'Ready' }); saveState(); closeModal(); renderDocuments(); showToast('Document added to your local vault'); } if (event.target.id === 'profile-form') { event.preventDefault(); closeModal(); showToast('Profile updated'); } });
+  document.addEventListener('submit', async (event) => { if (event.target.id === 'document-form') { event.preventDefault(); const form = new FormData(event.target); const file = form.get('file'); const id = `doc-${Date.now()}`; try { await saveLocalFile(id, file); state.documents.push({ id, name: form.get('name') || file.name, type: form.get('type'), size: file.size ? `${Math.ceil(file.size / 1024)} KB` : 'Local file', updated: 'Added just now', status: 'Stored locally' }); saveState(); closeModal(); renderDocuments(); showToast('Document stored privately on this device'); } catch (error) { showToast('This browser could not store the document locally'); } } if (event.target.id === 'profile-form') { event.preventDefault(); closeModal(); showToast('Profile updated'); } });
   document.addEventListener('click', (event) => { if (event.target.id === 'help-close') closeModal(); });
 }
 
