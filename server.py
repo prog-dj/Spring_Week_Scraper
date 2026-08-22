@@ -34,6 +34,12 @@ SEARCH_QUERIES = [
     "UK early careers insight programme applications",
     "UK student insight event applications",
     "UK technology law engineering spring insight applications",
+    "UK first year trading programme applications",
+    "UK FTTP student trading programme",
+    "UK freshman insight trading programme applications",
+    "UK first year insight programme applications",
+    "UK first year internship applications",
+    "UK student programme first year applications",
 ]
 USER_AGENT = "SpringboardOpportunityResearch/2.0 (+local student careers tool)"
 REQUEST_TIMEOUT = 15
@@ -113,7 +119,7 @@ def clean_text(html: str) -> str:
 
 def is_opportunity_candidate(result: dict) -> bool:
     haystack = f"{result.get('title', '')} {result.get('snippet', '')}".lower()
-    terms = ("spring week", "spring insight", "insight week", "insight programme", "insight program", "first year programme", "first-year programme")
+    terms = ("spring week", "spring insight", "insight week", "insight programme", "insight program", "first year programme", "first-year programme", "first year program", "first-year program", "first year insight", "first-year insight", "first year internship", "first-year internship", "first year trading", "first-year trading", "freshman insight", "fttp")
     excluded = ("reddit.com", "targetjobs.co.uk", "brightnetwork.co.uk", "higherin.com", "e4s.co.uk", "fe.training", "tracker", "calendar", "guide", "what is", "how do you get", "complete guide", "free resources")
     link = result.get("link", "").lower()
     return any(term in haystack for term in terms) and not any(term in f"{link} {haystack}" for term in excluded)
@@ -166,9 +172,20 @@ def extract_programme(title: str, snippet: str) -> str:
     return (title.strip() or snippet.strip() or "Insight opportunity")[:160]
 
 
+def opportunity_type(title: str, text: str = "") -> str:
+    lowered = f"{title} {text}".lower()
+    if "trading" in lowered or "fttp" in lowered:
+        return "Trading insight programme"
+    if "first year" in lowered or "first-year" in lowered:
+        return "First-year programme"
+    if "technology" in lowered or "engineering" in lowered or "software" in lowered:
+        return "Technology insight programme"
+    return "Insight programme"
+
+
 def infer_sector(text: str) -> str:
     lowered = text.lower()
-    for term, sector in (("law", "Law"), ("consult", "Consulting"), ("technology", "Technology"), ("asset management", "Asset Management"), ("investment bank", "Investment Banking"), ("banking", "Investment Banking")):
+    for term, sector in (("law", "Law"), ("consult", "Consulting"), ("technology", "Technology"), ("asset management", "Asset Management"), ("trading", "Trading & Quant"), ("quant", "Trading & Quant"), ("investment bank", "Investment Banking"), ("banking", "Investment Banking")):
         if term in lowered:
             return sector
     return "Other"
@@ -263,7 +280,7 @@ def evidence_excerpt(text: str, status: str, deadline: str | None) -> str:
 
 def verify_candidate(candidate: dict) -> dict:
     checked_at = utc_now()
-    base = {"id": stable_id(candidate["url"]), "company": extract_company(candidate.get("title", ""), candidate["url"]), "programme": extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": infer_sector(candidate.get("title", "")), "location": None, "opportunity_url": candidate["url"], "source_url": candidate["url"], "discovered_via": candidate["discovered_via"], "deadline": None, "programme_dates": None, "status": "unknown", "confidence": "low", "evidence": "Source could not be verified", "evidence_excerpt": None, "acceptance_rate": None, "perks": None, "http_status": None, "checked_at": checked_at, "last_error": None, "logo": "?", "logo_class": "", "opportunity_type": "Insight programme", "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(candidate.get("title", "")))}
+    base = {"id": stable_id(candidate["url"]), "company": extract_company(candidate.get("title", ""), candidate["url"]), "programme": extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": infer_sector(candidate.get("title", "")), "location": None, "opportunity_url": candidate["url"], "source_url": candidate["url"], "discovered_via": candidate["discovered_via"], "deadline": None, "programme_dates": None, "status": "unknown", "confidence": "low", "evidence": "Source could not be verified", "evidence_excerpt": None, "acceptance_rate": None, "perks": None, "http_status": None, "checked_at": checked_at, "last_error": None, "logo": "?", "logo_class": "", "opportunity_type": opportunity_type(candidate.get("title", ""), candidate.get("snippet", "")), "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(candidate.get("title", "")))}
     try:
         response = requests.get(candidate["url"], headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
         base["http_status"] = response.status_code
@@ -277,7 +294,7 @@ def verify_candidate(candidate: dict) -> dict:
         deadline = extract_deadline(text)
         programme_dates = extract_programme_dates(text)
         status, evidence, confidence = classify_status(text, deadline, programme_dates)
-        base.update({"company": extract_company(candidate.get("title", ""), candidate["url"]), "programme": extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": infer_sector(f"{candidate.get('title', '')} {text}"), "location": infer_location(text), "deadline": deadline, "programme_dates": programme_dates, "status": status, "confidence": confidence, "evidence": evidence, "evidence_excerpt": evidence_excerpt(text, status, deadline), "acceptance_rate": extract_acceptance_rate(text), "perks": extract_perks(text), "logo": extract_company(candidate.get("title", ""), candidate["url"])[:3].upper(), "logo_class": sector_logo_class(infer_sector(candidate.get("title", ""))), "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(f"{candidate.get('title', '')} {text}"))})
+        base.update({"company": extract_company(candidate.get("title", ""), candidate["url"]), "programme": extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": infer_sector(f"{candidate.get('title', '')} {text}"), "location": infer_location(text), "deadline": deadline, "programme_dates": programme_dates, "status": status, "confidence": confidence, "evidence": evidence, "evidence_excerpt": evidence_excerpt(text, status, deadline), "acceptance_rate": extract_acceptance_rate(text), "perks": extract_perks(text), "logo": extract_company(candidate.get("title", ""), candidate["url"])[:3].upper(), "logo_class": sector_logo_class(infer_sector(candidate.get("title", ""))), "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(f"{candidate.get('title', '')} {text}")), "opportunity_type": opportunity_type(candidate.get("title", ""), text)})
         if response.status_code >= 400 and rendered_text is None:
             base.update({"status": "unknown", "confidence": "low", "evidence": f"Source returned HTTP {response.status_code}; page could not be verified"})
     except Exception as error:
