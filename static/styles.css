@@ -17,11 +17,11 @@
   --ink-secondary: #55524a;
   --muted: #8c887c;
 
-  /* --- Color: single primary accent (terracotta) ----------------------- */
-  --accent: #ad4a2a;
-  --accent-hover: #8f3c21;
-  --accent-subtle: #f4e6de;
-  --accent-ink: #7a331b;
+  /* --- Color: single primary accent (dark green) ------------------------ */
+  --accent: #1f5c3f;
+  --accent-hover: #164630;
+  --accent-subtle: #e2ede6;
+  --accent-ink: #123c29;
 
   /* --- Color: sidebar (dark, warm charcoal — not navy/blue) ------------ */
   --sidebar-bg: #1b1916;
