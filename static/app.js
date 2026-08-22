@@ -85,6 +85,8 @@ function applyProfileToDom() {
   if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
   const refreshButton = $('#refresh-button');
   if (refreshButton) refreshButton.hidden = !user?.isAdmin;
+  const adminUsersStat = $('#admin-users-stat');
+  if (adminUsersStat) adminUsersStat.hidden = !user?.isAdmin;
 
   // Opportunity discovery is public; account features (applications, documents,
   // saved) require sign-in. Toggle the sidebar identity and the locked-state panels
@@ -120,6 +122,16 @@ async function loadUserState() {
   state.applications = applicationsRes.applications || [];
   state.saved = savedRes.saved || [];
   state.documents = documentsRes.documents || [];
+}
+
+async function loadAdminStats() {
+  try {
+    const response = await fetch('/api/admin/stats');
+    if (!response.ok) return;
+    const stats = await response.json();
+    $('#total-users-stat').textContent = stats.userCount ?? 0;
+    $('#admin-stat-meta').textContent = `${stats.opportunityCount ?? 0} opportunities · ${stats.applicationCount ?? 0} applications · ${stats.documentCount ?? 0} documents`;
+  } catch (error) { /* admin-only widget -- fail silently, not worth a toast */ }
 }
 
 async function upsertApplication(opportunityId, fields) {
@@ -800,6 +812,7 @@ async function boot() {
   const user = await loadSession();
   applyProfileToDom();
   if (user) await loadUserState();
+  if (user?.isAdmin) loadAdminStats();
   renderOverview(); renderOpportunities(); renderApplications(); renderDocuments(); renderPracticeModules(); bindEvents();
   initCookieBanner();
   loadOpportunities();

@@ -12,6 +12,17 @@ export const adminRoutes = new Hono<HonoEnv>({ strict: false });
 adminRoutes.get("/discover", async (c) => dispatchScrapeWorkflow(c.env));
 adminRoutes.get("/opportunities/refresh", async (c) => dispatchScrapeWorkflow(c.env));
 
+adminRoutes.get("/admin/stats", async (c) => {
+  const row = await c.env.DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM users) AS userCount,
+       (SELECT COUNT(*) FROM opportunities) AS opportunityCount,
+       (SELECT COUNT(*) FROM applications) AS applicationCount,
+       (SELECT COUNT(*) FROM documents) AS documentCount`
+  ).first<{ userCount: number; opportunityCount: number; applicationCount: number; documentCount: number }>();
+  return c.json(row);
+});
+
 async function dispatchScrapeWorkflow(env: {
   GITHUB_TOKEN?: string;
   GITHUB_REPO?: string;
