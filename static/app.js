@@ -391,6 +391,7 @@ function bindEvents() {
   $('#practice-skip-button').addEventListener('click', () => { if (practiceState.finished) return; practiceState.streak = 0; renderPracticeStats(); nextPracticeQuestion(); });
   $('#practice-reveal-button').addEventListener('click', handlePracticeReveal);
   $('#practice-next-prompt-button').addEventListener('click', () => nextPracticeQuestion());
+  $('#practice-answer-input').addEventListener('input', handlePracticeAnswerInput);
   $('#practice-answer-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handlePracticeSubmit(); } });
 }
 
@@ -402,13 +403,16 @@ const formatNum = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace
 function factorial(n) { let r = 1; for (let i = 2; i <= n; i += 1) r *= i; return r; }
 function comb(n, k) { return factorial(n) / (factorial(k) * factorial(n - k)); }
 
+// Ranges follow Zetamac's default arithmetic settings (zetamac.com/arithmetic):
+// addition/subtraction operands 2-100, multiplication 2-12 by 2-100,
+// division divisor 2-12 with quotient 2-100 (dividend built from those two).
 function genArithmetic() {
   const op = pick(['+', '−', '×', '÷']);
   let a, b, answer;
-  if (op === '+') { a = randInt(23, 987); b = randInt(23, 987); answer = a + b; }
-  else if (op === '−') { a = randInt(50, 987); b = randInt(10, a); answer = a - b; }
-  else if (op === '×') { a = randInt(11, 99); b = randInt(2, 19); answer = a * b; }
-  else { b = randInt(2, 19); answer = randInt(4, 60); a = b * answer; }
+  if (op === '+') { a = randInt(2, 100); b = randInt(2, 100); answer = a + b; }
+  else if (op === '−') { a = randInt(2, 100); b = randInt(2, 100); answer = a - b; }
+  else if (op === '×') { a = randInt(2, 12); b = randInt(2, 100); answer = a * b; }
+  else { b = randInt(2, 12); answer = randInt(2, 100); a = b * answer; }
   return {
     prompt: `${a} ${op} ${b} = ?`,
     checkAnswer: (input) => Math.round(Number(input)) === answer,
@@ -669,6 +673,24 @@ function renderPracticeStats() {
   $('#practice-score').textContent = String(practiceState.score);
   $('#practice-streak').textContent = String(practiceState.streak);
   $('#practice-prompts').textContent = String(practiceState.promptsReviewed);
+}
+
+// Checks the answer on every keystroke -- no Enter/Check click needed. A
+// correct answer advances immediately; an incomplete or wrong one is left
+// alone (no shake) since the user is still mid-type.
+function handlePracticeAnswerInput() {
+  if (practiceState.finished) return;
+  const module = currentPracticeModule();
+  if (module.type === 'reveal') return;
+  const input = $('#practice-answer-input');
+  const value = input.value.trim();
+  if (!value) return;
+  if (practiceState.question.checkAnswer(value)) {
+    practiceState.score += 1;
+    practiceState.streak += 1;
+    renderPracticeStats();
+    nextPracticeQuestion();
+  }
 }
 
 function handlePracticeSubmit() {
