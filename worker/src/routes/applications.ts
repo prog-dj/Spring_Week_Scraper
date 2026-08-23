@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../types";
-import { deleteApplication, listApplications, upsertApplication } from "../db/applications";
+import { deleteApplication, getApplicationOutcomes, listApplications, upsertApplication } from "../db/applications";
 import { opportunityExists } from "../db/opportunities";
 
 export const applicationsRoutes = new Hono<HonoEnv>({ strict: false });
@@ -8,6 +8,14 @@ export const applicationsRoutes = new Hono<HonoEnv>({ strict: false });
 applicationsRoutes.get("/", async (c) => {
   const user = c.get("user")!;
   return c.json({ applications: await listApplications(c.env, user.id) });
+});
+
+// Powers the Outcomes Sankey view -- must be registered before the
+// "/:opportunity_id" delete route's path pattern would otherwise be
+// ambiguous for a same-path GET.
+applicationsRoutes.get("/outcomes", async (c) => {
+  const user = c.get("user")!;
+  return c.json(await getApplicationOutcomes(c.env, user.id));
 });
 
 applicationsRoutes.post("/", async (c) => {

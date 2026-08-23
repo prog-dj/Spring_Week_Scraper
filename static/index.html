@@ -66,15 +66,26 @@
 
       <section class="view" id="opportunities-view">
         <div class="page-intro"><div><div class="eyebrow">DISCOVERY</div><h1>Find your spring week.</h1><p>Curated opportunities with the details that matter. Every fact has a source.</p></div><button class="secondary-button" id="refresh-button">↻ Refresh data</button></div>
-        <div class="filter-toolbar"><label class="search-field"><span>⌕</span><input id="opportunity-search" type="search" placeholder="Search firms, sectors or cities" /></label><select id="sector-filter"><option value="all">All sectors</option><option value="Investment Banking">Investment banking</option><option value="Asset Management">Asset management</option><option value="Trading & Quant">Trading and quant</option><option value="Consulting">Consulting</option><option value="Technology">Technology</option><option value="Law">Law</option></select><select id="status-filter"><option value="all">Any status</option><option value="open">Open now</option><option value="upcoming">Upcoming</option><option value="closed">Closed</option><option value="finished">Finished</option><option value="unknown">Needs review</option><option value="saved">Saved by me</option></select></div>
+        <div class="filter-toolbar"><label class="search-field"><span>⌕</span><input id="opportunity-search" type="search" placeholder="Search firms, sectors or cities" /></label><select id="sector-filter"><option value="all">All sectors</option><option value="Investment Banking">Investment banking</option><option value="Asset Management">Asset management</option><option value="Trading & Quant">Trading and quant</option><option value="Consulting">Consulting</option><option value="Technology">Technology</option><option value="Law">Law</option></select><select id="status-filter"><option value="all">Any status</option><option value="open">Open now</option><option value="upcoming">Upcoming</option><option value="closed">Closed</option><option value="finished">Finished</option><option value="unknown">Needs review</option><option value="saved">Saved by me</option></select><div class="view-toggle" id="opportunity-view-toggle" role="group" aria-label="Layout"><button class="view-toggle-btn" data-opportunity-view="cards" aria-label="Card view" title="Card view">▦</button><button class="view-toggle-btn" data-opportunity-view="table" aria-label="Table view" title="Table view">☰</button></div></div>
         <div class="source-note" id="source-note"><span>…</span> Checking official career pages…</div>
         <div class="opportunity-grid" id="opportunity-grid"></div>
+        <div class="opportunity-table-wrap" id="opportunity-table-wrap" hidden>
+          <table class="opportunity-table">
+            <thead><tr><th>Firm</th><th>Programme</th><th>Sector</th><th>Location</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
+            <tbody id="opportunity-table-body"></tbody>
+          </table>
+        </div>
       </section>
 
       <section class="view" id="applications-view">
         <div class="page-intro"><div><div class="eyebrow">YOUR APPLICATIONS</div><h1>Make every one count.</h1><p>A clear next action for every application, all in one place.</p></div><button class="primary-button" data-view-target="opportunities"><span>+</span> Add from search</button></div>
         <div class="locked-panel" id="applications-locked" hidden><h2>Sign in to track applications.</h2><p>Applications you track are saved to your account, not this browser, so they follow you anywhere.</p><a class="primary-button" href="/auth/login">Sign in with Google <span>→</span></a></div>
+        <div class="tab-toggle" id="applications-tab-toggle" role="group" aria-label="Applications view"><button class="tab-toggle-btn active" data-applications-tab="board">Board</button><button class="tab-toggle-btn" data-applications-tab="outcomes">Outcomes</button></div>
         <div class="application-board" id="application-board"></div>
+        <div class="outcomes-panel" id="outcomes-panel" hidden>
+          <div class="outcomes-summary" id="outcomes-summary"></div>
+          <div class="sankey-wrap" id="sankey-wrap"></div>
+        </div>
       </section>
 
       <section class="view" id="practice-view">

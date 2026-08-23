@@ -98,6 +98,8 @@ function applyProfileToDom() {
   if (applicationsLocked) applicationsLocked.hidden = !!user;
   const applicationBoard = $('#application-board');
   if (applicationBoard) applicationBoard.hidden = !user;
+  const applicationsTabToggle = $('#applications-tab-toggle');
+  if (applicationsTabToggle) applicationsTabToggle.hidden = !user;
   const documentsLocked = $('#documents-locked');
   if (documentsLocked) documentsLocked.hidden = !!user;
   const documentsLayout = $('#documents-layout');
@@ -179,6 +181,16 @@ function navigate(viewName) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Mirrors worker/src/db/applications.ts VALID_STATUSES -- keep in sync.
+const ALL_APPLICATION_STATUSES = ['Saved', 'Applied', 'Online Assessment', 'Interview', 'Offer', 'Rejected', 'No Response', 'Withdrawn'];
+const ACTIVE_APPLICATION_STATUSES = ['Applied', 'Online Assessment', 'Interview'];
+function statusPillClass(status) {
+  if (status === 'Offer') return 'open';
+  if (status === 'Online Assessment' || status === 'Interview') return 'soon';
+  if (status === 'Rejected' || status === 'No Response' || status === 'Withdrawn') return 'urgent';
+  return 'neutral';
+}
+
 function daysUntilDeadline(dateStr) {
   const target = new Date(`${dateStr}T00:00:00Z`);
   const now = new Date();
@@ -188,21 +200,39 @@ function daysUntilDeadline(dateStr) {
 
 function renderOverview() {
   $('#saved-opportunities-stat').textContent = state.saved.length;
-  $('#in-progress-stat').textContent = state.applications.filter((application) => application.status === 'In progress').length;
+  $('#in-progress-stat').textContent = state.applications.filter((application) => ACTIVE_APPLICATION_STATUSES.includes(application.status)).length;
   $('#closing-soon-stat').textContent = opportunityData.filter((item) => item.deadline && daysUntilDeadline(item.deadline) >= 0 && daysUntilDeadline(item.deadline) <= 14).length;
   $('#nav-application-count').textContent = state.applications.length;
   const timelineItems = state.applications.slice(0, 4).map((application) => {
     const opportunity = getOpportunity(application.opportunity_id);
-    const statusClass = application.status === 'In progress' ? 'urgent' : application.status === 'To apply' ? 'soon' : 'open';
-    return `<div class="timeline-item"><span class="timeline-date">${application.deadline || 'No deadline'}</span><span class="timeline-line"><span class="timeline-dot"></span><span class="timeline-connector"></span></span><div class="timeline-copy"><strong>${opportunity?.firm || application.company || application.opportunity_id}</strong><span>${application.next_action || 'Review requirements'}</span></div><span class="status-pill ${statusClass}">${application.status}</span></div>`;
+    return `<div class="timeline-item"><span class="timeline-date">${application.deadline || 'No deadline'}</span><span class="timeline-line"><span class="timeline-dot"></span><span class="timeline-connector"></span></span><div class="timeline-copy"><strong>${opportunity?.firm || application.company || application.opportunity_id}</strong><span>${application.next_action || 'Review requirements'}</span></div><span class="status-pill ${statusPillClass(application.status)}">${application.status}</span></div>`;
   }).join('');
   $('#timeline-list').innerHTML = timelineItems || '<p class="empty-state">No applications tracked yet.</p>';
   $('#recommended-list').innerHTML = opportunityData.slice(0, 3).map((item) => `<article class="opportunity-mini"><div class="firm-line"><span class="firm-logo ${item.logoClass}">${item.logo}</span><div><strong>${item.firm}</strong><span>${item.sector}</span></div></div><h3>${item.role}</h3><span class="mini-meta">${item.location} · Closes ${item.deadline || 'not published'}</span></article>`).join('');
 }
 
+let opportunityViewMode = 'cards';
+try { opportunityViewMode = localStorage.getItem('springr_opportunity_view') || 'cards'; } catch (error) { /* private mode etc -- default to cards */ }
+
+function setOpportunityViewMode(mode) {
+  opportunityViewMode = mode;
+  try { localStorage.setItem('springr_opportunity_view', mode); } catch (error) { /* nothing we can do if storage is blocked */ }
+  $$('[data-opportunity-view]').forEach((button) => button.classList.toggle('active', button.dataset.opportunityView === mode));
+  renderOpportunities();
+}
+
+function opportunityStatusLabel(item) {
+  return item.status === 'open' ? 'Open now' : item.status === 'upcoming' ? 'Upcoming' : item.status === 'closed' ? 'Closed' : item.status === 'finished' ? 'Finished' : 'Status unknown';
+}
+
 function renderOpportunities() {
+  $$('[data-opportunity-view]').forEach((button) => button.classList.toggle('active', button.dataset.opportunityView === opportunityViewMode));
+  $('#opportunity-grid').hidden = opportunityViewMode !== 'cards';
+  $('#opportunity-table-wrap').hidden = opportunityViewMode !== 'table';
+
   if (dataLoading) {
     $('#opportunity-grid').innerHTML = '<div class="empty-state">Checking official career pages…</div>';
+    $('#opportunity-table-body').innerHTML = '';
     return;
   }
   const query = ($('#opportunity-search')?.value || '').toLowerCase();
@@ -215,10 +245,18 @@ function renderOpportunities() {
     return textMatch && sectorMatch && statusMatch;
   });
   const lockedRemainder = opportunitiesAuthenticated ? 0 : Math.max(0, opportunitiesTotalCount - opportunityData.length);
-  const lockedHtml = lockedRemainder ? renderLockedOpportunityPreview(lockedRemainder) : '';
+
+  if (opportunityViewMode === 'table') {
+    renderOpportunityTable(filtered, lockedRemainder);
+  } else {
+    renderOpportunityCards(filtered, lockedRemainder);
+  }
+}
+
+function renderOpportunityCards(filtered, lockedRemainder) {
+  const lockedHtml = lockedRemainder ? renderLockedOpportunityCards(lockedRemainder) : '';
   $('#opportunity-grid').innerHTML = (filtered.length ? filtered.map((item) => {
     const saved = state.saved.includes(item.id);
-    const statusLabel = item.status === 'open' ? 'Open now' : item.status === 'upcoming' ? 'Upcoming' : item.status === 'closed' ? 'Closed' : item.status === 'finished' ? 'Finished' : 'Status unknown';
     const cardFacts = [];
     if (Array.isArray(item.application_process) && item.application_process.length) {
       cardFacts.push(`<div class="fact" style="grid-column:1/-1"><label>Application process</label><span>${item.application_process.join(' → ')}</span></div>`);
@@ -230,23 +268,152 @@ function renderOpportunities() {
       cardFacts.push(`<div class="fact"><label>Format</label><span>${item.format}</span></div>`);
     }
     cardFacts.push(`<div class="fact"><label>Data status</label><span>${item.source}</span></div>`);
-    cardFacts.push(`<div class="fact"><label>Application</label><span>${statusLabel}</span></div>`);
+    cardFacts.push(`<div class="fact"><label>Application</label><span>${opportunityStatusLabel(item)}</span></div>`);
     const subline = item.location ? `${item.type} · ${item.location}` : item.type;
     return `<article class="opportunity-card"><div class="card-top"><div class="firm-line"><span class="firm-logo ${item.logoClass}">${item.logo}</span><div><strong>${item.firm}</strong><span>${item.sector}</span></div></div><button class="save-button ${saved ? 'saved' : ''}" data-save="${item.id}" aria-label="${saved ? 'Remove from saved' : 'Save'} ${item.firm}">${saved ? '♥' : '♡'}</button></div><h2>${item.role}</h2><span class="role">${subline}</span><div class="opportunity-facts">${cardFacts.join('')}</div><div class="card-bottom"><span class="deadline">Deadline: <strong>${item.deadline || 'Not published'}</strong></span><button class="small-button" data-apply="${item.id}">${state.applications.some((application) => application.opportunity_id === item.id) ? 'View application' : 'Track opportunity'}</button></div></article>`;
   }).join('') : '<div class="empty-state"><strong>No verified opportunities are available.</strong><p>Try Refresh data after checking that the local scraper server is running.</p></div>') + lockedHtml;
 }
 
-function renderLockedOpportunityPreview(count) {
+function renderOpportunityTable(filtered, lockedRemainder) {
+  const rows = filtered.length ? filtered.map((item) => {
+    const saved = state.saved.includes(item.id);
+    return `<tr><td><span class="firm-logo ${item.logoClass}">${item.logo}</span>${item.firm}</td><td>${item.role}</td><td>${item.sector || '—'}</td><td>${item.location || '—'}</td><td>${item.deadline || 'Not published'}</td><td><span class="status-pill ${item.status === 'open' ? 'open' : item.status === 'upcoming' ? 'soon' : 'neutral'}">${opportunityStatusLabel(item)}</span></td><td><div class="row-actions"><button class="save-button ${saved ? 'saved' : ''}" data-save="${item.id}" aria-label="${saved ? 'Remove from saved' : 'Save'} ${item.firm}">${saved ? '♥' : '♡'}</button><button class="small-button" data-apply="${item.id}">${state.applications.some((application) => application.opportunity_id === item.id) ? 'View' : 'Track'}</button></div></td></tr>`;
+  }).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>No verified opportunities are available.</strong><p>Try Refresh data after checking that the local scraper server is running.</p></div></td></tr>';
+  const lockedRows = lockedRemainder ? renderLockedOpportunityRows(lockedRemainder) : '';
+  $('#opportunity-table-body').innerHTML = rows + lockedRows;
+}
+
+function renderLockedOpportunityCards(count) {
   const placeholders = Array.from({ length: Math.min(count, 6) }, () => `<article class="opportunity-card locked" aria-hidden="true"><div class="card-top"><div class="firm-line"><span class="firm-logo">••</span><div><strong>Firm name</strong><span>Sector</span></div></div></div><h2>Programme name</h2><span class="role">Location</span><div class="opportunity-facts"><div class="fact"><label>Deadline</label><span>••• •••</span></div><div class="fact"><label>Application</label><span>••••••</span></div></div></article>`).join('');
-  return `${placeholders}<div class="opportunity-lock-banner"><h3>Sign in to see all ${opportunitiesTotalCount} opportunities</h3><p>Free with Google sign-in -- no card, no catch.</p><a class="primary-button" href="/auth/login">Sign in with Google <span>→</span></a></div>`;
+  return placeholders + opportunityLockBanner();
+}
+
+function renderLockedOpportunityRows(count) {
+  const placeholders = Array.from({ length: Math.min(count, 6) }, () => `<tr class="locked" aria-hidden="true"><td><span class="firm-logo">••</span>Firm name</td><td>Programme name</td><td>Sector</td><td>Location</td><td>••• •••</td><td>••••••</td><td></td></tr>`).join('');
+  return `${placeholders}<tr><td colspan="7">${opportunityLockBanner()}</td></tr>`;
+}
+
+function opportunityLockBanner() {
+  return `<div class="opportunity-lock-banner"><h3>Sign in to see all ${opportunitiesTotalCount} opportunities</h3><p>Free with Google sign-in -- no card, no catch.</p><a class="primary-button" href="/auth/login">Sign in with Google <span>→</span></a></div>`;
 }
 
 function renderApplications() {
-  const columns = ['Saved', 'In progress', 'Submitted', 'To apply'];
-  $('#application-board').innerHTML = columns.map((column) => {
+  $('#application-board').innerHTML = ALL_APPLICATION_STATUSES.map((column) => {
     const applications = state.applications.filter((application) => application.status === column);
-    return `<section class="board-column"><div class="board-column-header"><strong>${column}</strong><span>${applications.length}</span></div>${applications.map((application) => { const opportunity = getOpportunity(application.opportunity_id); return `<article class="board-card"><h3>${opportunity?.firm || application.company || application.opportunity_id}</h3><p>${opportunity?.role || application.programme || 'Application'}<br>${application.next_action || 'Review requirements and tailor materials'}</p><div class="board-card-footer"><span>${application.progress || 0}% ready</span><button class="move-button" data-cycle="${application.opportunity_id}">${column === 'Submitted' ? 'Review' : 'Move →'}</button></div></article>`; }).join('')}</section>`;
+    return `<section class="board-column"><div class="board-column-header"><strong>${column}</strong><span>${applications.length}</span></div>${applications.map((application) => {
+      const opportunity = getOpportunity(application.opportunity_id);
+      const options = ALL_APPLICATION_STATUSES.map((s) => `<option value="${s}" ${s === application.status ? 'selected' : ''}>${s}</option>`).join('');
+      return `<article class="board-card"><h3>${opportunity?.firm || application.company || application.opportunity_id}</h3><p>${opportunity?.role || application.programme || 'Application'}<br>${application.next_action || 'Review requirements and tailor materials'}</p><div class="board-card-footer"><span>${application.progress || 0}% ready</span><select class="status-select" data-status-select="${application.opportunity_id}">${options}</select></div></article>`;
+    }).join('')}</section>`;
   }).join('');
+}
+
+// --- Application outcomes (Sankey) ------------------------------------------
+let applicationsTab = 'board';
+
+function setApplicationsTab(tab) {
+  applicationsTab = tab;
+  $$('[data-applications-tab]').forEach((button) => button.classList.toggle('active', button.dataset.applicationsTab === tab));
+  $('#application-board').hidden = tab !== 'board';
+  $('#outcomes-panel').hidden = tab !== 'outcomes';
+  if (tab === 'outcomes') loadAndRenderOutcomes();
+}
+
+async function loadAndRenderOutcomes() {
+  $('#outcomes-summary').textContent = 'Loading…';
+  $('#sankey-wrap').innerHTML = '';
+  try {
+    const response = await fetch('/api/applications/outcomes');
+    if (!response.ok) throw new Error('failed to load outcomes');
+    renderOutcomes(await response.json());
+  } catch (error) {
+    $('#outcomes-summary').textContent = 'Could not load your application outcomes.';
+  }
+}
+
+function sankeyStatusColor(status) {
+  if (status === 'Offer') return 'var(--green)';
+  if (status === 'Online Assessment' || status === 'Interview') return 'var(--amber)';
+  if (status === 'Rejected' || status === 'No Response' || status === 'Withdrawn') return 'var(--red)';
+  return 'var(--accent)';
+}
+
+function renderOutcomes(data) {
+  if (!data.totalApplications) {
+    $('#outcomes-summary').textContent = 'No applications tracked yet -- track one from Find opportunities to see your outcomes here.';
+    $('#sankey-wrap').innerHTML = '';
+    return;
+  }
+  const offerCount = data.byStatus.find((s) => s.status === 'Offer')?.count || 0;
+  $('#outcomes-summary').innerHTML = `<strong>${data.totalApplications}</strong> application${data.totalApplications === 1 ? '' : 's'} tracked · <strong>${offerCount}</strong> offer${offerCount === 1 ? '' : 's'}`;
+
+  const rootNode = { id: 'root', label: 'Applications', value: data.totalApplications, color: 'var(--ink-secondary)' };
+  const statusNodes = data.byStatus.map((s) => ({ id: `status:${s.status}`, label: s.status, value: s.count, color: sankeyStatusColor(s.status) }));
+  const levels = [[rootNode], statusNodes];
+  const links = data.byStatus.map((s) => ({ source: 'root', target: `status:${s.status}`, value: s.count, color: sankeyStatusColor(s.status) }));
+
+  if (data.offersByCompany.length) {
+    const companyNodes = data.offersByCompany.map((o) => ({ id: `company:${o.company}`, label: o.company, value: o.count, color: 'var(--green)' }));
+    levels.push(companyNodes);
+    data.offersByCompany.forEach((o) => links.push({ source: 'status:Offer', target: `company:${o.company}`, value: o.count, color: 'var(--green)' }));
+  }
+
+  renderSankey($('#sankey-wrap'), levels, links);
+}
+
+// A small hand-rolled Sankey renderer (no charting library -- keeps the app
+// dependency-free and CSP-simple). `levels` is an array of node arrays, one
+// per column; `links` connect node ids across adjacent columns.
+function renderSankey(container, levels, links) {
+  const nodeWidth = 14;
+  const columnGap = 170;
+  const leftPad = 20;
+  const rightPad = 170;
+  const gap = 10;
+  const minHeight = 20;
+  const columnHeight = Math.max(260, ...levels.map((lvl) => lvl.length * (minHeight + gap)));
+  const totalWidth = leftPad + levels.length * nodeWidth + (levels.length - 1) * columnGap + rightPad;
+
+  const nodeById = {};
+  levels.forEach((levelNodes, levelIndex) => {
+    const totalValue = levelNodes.reduce((sum, n) => sum + n.value, 0) || 1;
+    const availableHeight = columnHeight - gap * Math.max(0, levelNodes.length - 1);
+    const heights = levelNodes.map((n) => Math.max(minHeight, (n.value / totalValue) * availableHeight));
+    const totalHeight = heights.reduce((sum, h) => sum + h, 0) + gap * Math.max(0, levelNodes.length - 1);
+    let cursor = totalHeight > columnHeight ? 0 : (columnHeight - totalHeight) / 2;
+    levelNodes.forEach((n, i) => {
+      const positioned = { ...n, x: leftPad + levelIndex * (nodeWidth + columnGap), y: cursor, height: heights[i] };
+      nodeById[n.id] = positioned;
+      cursor += heights[i] + gap;
+    });
+  });
+
+  const outCursor = {};
+  const inCursor = {};
+  const linkPaths = links.map((link) => {
+    const source = nodeById[link.source];
+    const target = nodeById[link.target];
+    if (!source || !target || !link.value) return '';
+    const sThick = (link.value / source.value) * source.height;
+    const tThick = (link.value / target.value) * target.height;
+    const sy0 = source.y + (outCursor[link.source] || 0);
+    outCursor[link.source] = (outCursor[link.source] || 0) + sThick;
+    const ty0 = target.y + (inCursor[link.target] || 0);
+    inCursor[link.target] = (inCursor[link.target] || 0) + tThick;
+    const sx = source.x + nodeWidth;
+    const tx = target.x;
+    const midX = (sx + tx) / 2;
+    const sy1 = sy0 + sThick;
+    const ty1 = ty0 + tThick;
+    return `<path d="M${sx},${sy0} C${midX},${sy0} ${midX},${ty0} ${tx},${ty0} L${tx},${ty1} C${midX},${ty1} ${midX},${sy1} ${sx},${sy1} Z" fill="${link.color || 'var(--muted)'}" fill-opacity="0.32"></path>`;
+  }).join('');
+
+  const nodeMarkup = Object.values(nodeById).map((n) => {
+    const labelX = n.x + nodeWidth + 8;
+    return `<rect x="${n.x}" y="${n.y}" width="${nodeWidth}" height="${Math.max(n.height, 1)}" rx="2" fill="${n.color || 'var(--accent)'}"></rect><text x="${labelX}" y="${n.y + n.height / 2 + 4}" class="sankey-node-label">${n.label} <tspan class="sankey-node-value">(${n.value})</tspan></text>`;
+  }).join('');
+
+  container.innerHTML = `<svg width="${totalWidth}" height="${columnHeight + 20}" viewBox="0 0 ${totalWidth} ${columnHeight + 20}">${linkPaths}${nodeMarkup}</svg>`;
 }
 
 function renderDocuments() {
@@ -303,13 +470,23 @@ async function openWorkspace(item) {
       workspace.required_documents = workspace.required_documents.map((entry, index) => ({ ...entry, complete: $(`[data-document-required="${index}"]`).checked }));
       const saveResponse = await fetch('/api/workspace', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(workspace) });
       if (!saveResponse.ok) { showToast('Workspace could not be saved'); return; }
-      const applicationStatus = workspace.status === 'Preparing' ? 'In progress' : workspace.status === 'Submitted' ? 'Submitted' : workspace.status === 'Ready to submit' ? 'To apply' : 'Saved';
-      const progress = workspace.status === 'Submitted' ? 100 : workspace.status === 'Preparing' ? 68 : workspace.status === 'Ready to submit' ? 85 : 25;
-      try {
-        await upsertApplication(item.id, { status: applicationStatus, progress, next_action: workspace.notes || null });
-        renderOverview();
-        renderApplications();
-      } catch (error) { /* application tracking is best-effort here; workspace itself already saved */ }
+      // The workspace's own status field only tracks pre-submission prep
+      // (Saved/Preparing/Ready to submit/Submitted) -- it only ever flips the
+      // tracked application to "Applied" once truly submitted, and never
+      // downgrades a status that's already progressed further (Online
+      // Assessment/Interview/Offer/Rejected/etc.), which is only ever set via
+      // the status dropdown on the Applications board.
+      const existingApplication = state.applications.find((application) => application.opportunity_id === item.id);
+      const advancedStatuses = ['Online Assessment', 'Interview', 'Offer', 'Rejected', 'No Response', 'Withdrawn'];
+      if (!existingApplication || !advancedStatuses.includes(existingApplication.status)) {
+        const applicationStatus = workspace.status === 'Submitted' ? 'Applied' : 'Saved';
+        const progress = workspace.status === 'Submitted' ? 100 : workspace.status === 'Preparing' ? 60 : workspace.status === 'Ready to submit' ? 85 : 20;
+        try {
+          await upsertApplication(item.id, { status: applicationStatus, progress, next_action: workspace.notes || null });
+          renderOverview();
+          renderApplications();
+        } catch (error) { /* application tracking is best-effort here; workspace itself already saved */ }
+      }
       closeModal(); showToast('Application workspace saved');
     });
   } catch (error) { showToast('Application workspace is unavailable'); }
@@ -331,21 +508,31 @@ async function trackApplication(id) {
   navigate('applications');
 }
 
-async function cycleApplication(opportunityId) {
-  const application = state.applications.find((item) => item.opportunity_id === opportunityId);
-  if (!application) return;
-  const order = ['Saved', 'In progress', 'Submitted'];
-  const currentIndex = order.indexOf(application.status);
-  const nextStatus = order[(currentIndex + 1) % order.length];
-  const progress = nextStatus === 'Saved' ? 25 : nextStatus === 'In progress' ? 68 : 100;
-  const nextAction = nextStatus === 'Submitted' ? 'Application submitted today' : nextStatus === 'In progress' ? 'Next action ready to complete' : 'Review requirements and tailor materials';
+const STATUS_PROGRESS = { Saved: 10, Applied: 40, 'Online Assessment': 55, Interview: 75, Offer: 100, Rejected: 100, 'No Response': 100, Withdrawn: 100 };
+const STATUS_NEXT_ACTION = {
+  Saved: 'Review requirements and tailor materials',
+  Applied: 'Awaiting a response',
+  'Online Assessment': 'Complete the online assessment',
+  Interview: 'Prepare for your interview',
+  Offer: 'Respond to your offer',
+  Rejected: 'Application closed',
+  'No Response': 'No response yet -- consider following up',
+  Withdrawn: 'Application withdrawn',
+};
+
+async function handleStatusSelectChange(opportunityId, nextStatus) {
   try {
-    await upsertApplication(opportunityId, { status: nextStatus, progress, next_action: nextAction });
+    await upsertApplication(opportunityId, {
+      status: nextStatus,
+      progress: STATUS_PROGRESS[nextStatus] ?? 0,
+      next_action: STATUS_NEXT_ACTION[nextStatus] || null,
+    });
     renderApplications();
     renderOverview();
     showToast(`${getOpportunity(opportunityId)?.firm || 'Application'} moved to ${nextStatus}`);
   } catch (error) {
     showToast('Could not update this application');
+    renderApplications();
   }
 }
 
@@ -354,6 +541,12 @@ function bindEvents() {
   $$('[data-view-target]').forEach((item) => item.addEventListener('click', () => navigate(item.dataset.viewTarget)));
   $('#mobile-nav-select').addEventListener('change', (event) => navigate(event.target.value));
   $('#opportunity-search').addEventListener('input', renderOpportunities); $('#sector-filter').addEventListener('change', renderOpportunities); $('#status-filter').addEventListener('change', renderOpportunities);
+  $$('[data-opportunity-view]').forEach((button) => button.addEventListener('click', () => setOpportunityViewMode(button.dataset.opportunityView)));
+  $$('[data-applications-tab]').forEach((button) => button.addEventListener('click', () => setApplicationsTab(button.dataset.applicationsTab)));
+  document.addEventListener('change', (event) => {
+    const statusSelect = event.target.closest('[data-status-select]');
+    if (statusSelect) handleStatusSelectChange(statusSelect.dataset.statusSelect, statusSelect.value);
+  });
   $('#refresh-button').addEventListener('click', async () => { $('#refresh-button').textContent = 'Checking…'; await loadOpportunities(true); $('#refresh-button').textContent = '✓ Up to date'; setTimeout(() => { $('#refresh-button').textContent = '↻ Refresh data'; }, 2200); });
   $('#help-button').addEventListener('click', () => openModal('<span class="eyebrow">QUICK HELP</span><h2>How Springr keeps you moving</h2><p>Use Find opportunities to build your shortlist, Applications to track the next action, and Documents to keep your materials ready.</p><button class="primary-button full-width" id="help-close">Got it</button>'));
   $('#profile-button').addEventListener('click', () => navigate('documents'));
@@ -377,7 +570,6 @@ function bindEvents() {
   document.addEventListener('click', (event) => {
     const save = event.target.closest('[data-save]'); if (save) toggleSaved(save.dataset.save);
     const apply = event.target.closest('[data-apply]'); if (apply) openOpportunity(apply.dataset.apply);
-    const cycle = event.target.closest('[data-cycle]'); if (cycle) cycleApplication(cycle.dataset.cycle);
     const practiceModule = event.target.closest('[data-practice-module]'); if (practiceModule) startPracticeModule(practiceModule.dataset.practiceModule);
     const deleteDoc = event.target.closest('[data-document-delete]');
     if (deleteDoc) {
