@@ -70,8 +70,6 @@ Optional:
 
 ```bash
 npx wrangler secret put SENTRY_DSN            # error tracking, see step 9
-npx wrangler secret put GITHUB_TOKEN          # only if you want the admin "trigger scrape now" button to work
-npx wrangler secret put GITHUB_REPO           # e.g. yourname/springr
 ```
 
 Also run `npx wrangler secret put ENVIRONMENT` and enter `production` — this

@@ -9,12 +9,6 @@ export type Env = {
   ADMIN_EMAILS: string;
   INGEST_SHARED_SECRET: string;
 
-  // Optional: lets an admin manually trigger the GitHub Actions scrape
-  // workflow early, on top of its normal cron schedule.
-  GITHUB_TOKEN?: string;
-  GITHUB_REPO?: string;
-  GITHUB_WORKFLOW_FILE?: string;
-
   // Optional: Sentry error tracking. Unset locally so wrangler dev doesn't
   // report noise; set as a secret in production.
   SENTRY_DSN?: string;

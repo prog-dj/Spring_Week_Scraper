@@ -87,6 +87,8 @@ Cloudflare Workers + D1 + R2 + GitHub Actions architecture.
   traffic but every check is a D1 round-trip; if usage grows into the
   thousands of requests/minute range, moving to a Durable Object or Cloudflare's
   built-in Rate Limiting (paid) would scale better.
-- **GITHUB_TOKEN scope** — if you set this for the manual "trigger scrape now"
-  admin button, use a fine-grained PAT scoped to just `Actions: write` on this
-  one repo, not a broad classic token.
+- **Scraper triggering** — deliberately removed the in-app "trigger scrape
+  now" admin button (it spent real Serper credit on a single click, with no
+  confirmation). The scraper now only ever runs on its GitHub Actions
+  schedule; to run it early, trigger the workflow manually from the repo's
+  Actions tab on GitHub instead -- an extra, deliberate step outside the app.

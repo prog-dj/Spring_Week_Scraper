@@ -6,11 +6,11 @@ let opportunitiesTotalCount = 0;
 /* The opportunity list is loaded from the API. No fallback records are fabricated here.
    Signed-out visitors only get a preview slice server-side -- see the "authenticated"/
    "totalCount" fields, used to render the locked/blurred remainder. */
-async function loadOpportunities(force = false) {
+async function loadOpportunities() {
   dataLoading = true;
   renderOpportunities();
   try {
-    const response = await fetch(force ? '/api/opportunities/refresh' : '/api/opportunities');
+    const response = await fetch('/api/opportunities');
     if (!response.ok) throw new Error(`API returned ${response.status}`);
     const payload = await response.json();
     opportunityData = payload.opportunities || [];
@@ -20,7 +20,7 @@ async function loadOpportunities(force = false) {
     $('#source-note').innerHTML = `<span>✓</span> Sources checked ${formatCheckedAt(dataCheckedAt)} · Official-page results only. Unknown fields stay unknown.`;
   } catch (error) {
     opportunityData = [];
-    $('#source-note').innerHTML = `<span>!</span> Live source check failed. Start the Python server and try Refresh data again.`;
+    $('#source-note').innerHTML = `<span>!</span> Live source check failed. Please try again shortly.`;
     showToast('Could not reach the live data service');
   } finally {
     dataLoading = false;
@@ -83,8 +83,6 @@ function applyProfileToDom() {
   if (greeting) greeting.textContent = user?.name ? `Your next move, ${user.name.split(' ')[0]}.` : 'Your next move.';
   const dateLabel = $('#overview-date');
   if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
-  const refreshButton = $('#refresh-button');
-  if (refreshButton) refreshButton.hidden = !user?.isAdmin;
   const adminUsersStat = $('#admin-users-stat');
   if (adminUsersStat) adminUsersStat.hidden = !user?.isAdmin;
 
@@ -547,7 +545,6 @@ function bindEvents() {
     const statusSelect = event.target.closest('[data-status-select]');
     if (statusSelect) handleStatusSelectChange(statusSelect.dataset.statusSelect, statusSelect.value);
   });
-  $('#refresh-button').addEventListener('click', async () => { $('#refresh-button').textContent = 'Checking…'; await loadOpportunities(true); $('#refresh-button').textContent = '✓ Up to date'; setTimeout(() => { $('#refresh-button').textContent = '↻ Refresh data'; }, 2200); });
   $('#help-button').addEventListener('click', () => openModal('<span class="eyebrow">QUICK HELP</span><h2>How Springr keeps you moving</h2><p>Use Find opportunities to build your shortlist, Applications to track the next action, and Documents to keep your materials ready.</p><button class="primary-button full-width" id="help-close">Got it</button>'));
   $('#profile-button').addEventListener('click', () => navigate('documents'));
   $('#logout-button').addEventListener('click', () => { window.location.href = '/auth/logout'; });

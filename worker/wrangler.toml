@@ -23,7 +23,7 @@ bucket_name = "springr-documents"
 #   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET, ADMIN_EMAILS,
 #   INGEST_SHARED_SECRET (the token GitHub Actions uses to push scraped results)
 #   ENVIRONMENT ("production" once deployed -- makes session cookies Secure)
-#   SENTRY_DSN, GITHUB_TOKEN, GITHUB_REPO (all optional)
+#   SENTRY_DSN (optional)
 #
 # ENVIRONMENT is a secret, not a [vars] entry -- `wrangler deploy` overwrites
 # a secret with any [vars] entry of the same name on every deploy, which
