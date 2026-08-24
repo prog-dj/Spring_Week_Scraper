@@ -845,12 +845,13 @@ const PRACTICE_MODULES = [
   { id: 'probability', title: 'Probability & EV', blurb: 'Dice, coins, cards, and expected value.', type: 'numeric', generate: genProbability },
   { id: 'sequences', title: 'Number Sequences', blurb: 'Spot the pattern, name the next term.', type: 'numeric', generate: genSequence },
   { id: 'sizing', title: 'Market Sizing', blurb: 'Classic guesstimate prompts with a structuring framework.', type: 'reveal', generate: genSizing },
+  { id: 'interview', title: 'Interview Practice', blurb: 'Record yourself answering real interview questions, HireVue-style, with feedback on delivery.', type: 'coming-soon', badge: 'Coming soon · Paid' },
 ];
 
 let practiceState = { moduleId: null, question: null, score: 0, streak: 0, promptsReviewed: 0, durationSeconds: 60, remainingSeconds: 0, timerId: null, finished: false };
 
 function renderPracticeModules() {
-  $('#practice-modules').innerHTML = PRACTICE_MODULES.map((m) => `<article class="practice-module-card" data-practice-module="${m.id}"><h3>${m.title}</h3><p>${m.blurb}</p><span class="text-button">Start <span>→</span></span></article>`).join('');
+  $('#practice-modules').innerHTML = PRACTICE_MODULES.map((m) => `<article class="practice-module-card${m.type === 'coming-soon' ? ' coming-soon' : ''}" data-practice-module="${m.id}">${m.badge ? `<span class="practice-module-badge">${m.badge}</span>` : ''}<h3>${m.title}</h3><p>${m.blurb}</p><span class="text-button">${m.type === 'coming-soon' ? 'Notify me' : 'Start'} <span>→</span></span></article>`).join('');
 }
 
 function currentPracticeModule() {
@@ -858,13 +859,18 @@ function currentPracticeModule() {
 }
 
 function startPracticeModule(moduleId) {
+  const module = PRACTICE_MODULES.find((m) => m.id === moduleId);
+  if (module.type === 'coming-soon') {
+    openModal(`<span class="eyebrow">COMING SOON · PAID FEATURE</span><h2>${module.title}</h2><p>${module.blurb}</p><p>We're building a HireVue-style simulated video interview -- record timed answers to real interview questions and get feedback on delivery, not just content. This will be a paid add-on once it launches.</p><button class="primary-button full-width" id="practice-coming-soon-close">Got it</button>`);
+    $('#practice-coming-soon-close').addEventListener('click', closeModal);
+    return;
+  }
   clearInterval(practiceState.timerId);
   practiceState = { moduleId, question: null, score: 0, streak: 0, promptsReviewed: 0, durationSeconds: 60, remainingSeconds: 0, timerId: null, finished: false };
   $('#practice-modules').hidden = true;
   $('#practice-active').hidden = false;
   $('#practice-duration-picker').hidden = false;
   $('#practice-session').hidden = true;
-  const module = currentPracticeModule();
   $('#practice-active-label').textContent = module.type === 'reveal' ? 'GUESSTIMATE' : 'DRILL';
   $('#practice-active-title').textContent = module.title;
 }

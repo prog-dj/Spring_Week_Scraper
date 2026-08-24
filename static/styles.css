@@ -390,6 +390,9 @@ h1, h2, h3, p { margin: 0; }
 .practice-module-card h3 { font: 600 14px var(--font); margin: 0 0 6px; }
 .practice-module-card p { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0 0 14px; }
 .practice-module-card .text-button { font-size: 11px; pointer-events: none; }
+.practice-module-card.coming-soon { background: var(--surface-sunken); }
+.practice-module-card.coming-soon:hover { border-color: var(--border); transform: none; }
+.practice-module-badge { background: var(--accent-subtle); border-radius: var(--radius-sm); color: var(--accent-ink); display: inline-block; font-size: 9px; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 10px; padding: 3px 8px; text-transform: uppercase; }
 
 .practice-active-header { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 14px; }
 .practice-active-header h2 { font: 600 18px var(--font); margin: 6px 0 0; max-width: 44ch; }
