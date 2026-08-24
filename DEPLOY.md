@@ -111,6 +111,41 @@ Triggers → Custom Domains). This puts Cloudflare's proxy/WAF/DDoS protection
 in front of the app at no extra cost, and gives you a real domain instead of
 `*.workers.dev`.
 
+## 11. Interview Practice (optional, paid feature — not live yet)
+
+The Interview Practice module (simulated video interviews with AI feedback)
+is built but **deliberately not enabled in production** until you decide to
+launch it. Setting these up doesn't turn it on by itself, but it's needed
+before you can test the feature end-to-end, even in `wrangler dev`:
+
+- **Stripe**: create a [Stripe](https://stripe.com) account, a Product
+  ("Springr Interview Practice"), and a recurring **monthly** Price — copy the
+  Price ID. Set the three secrets:
+  ```bash
+  npx wrangler secret put STRIPE_SECRET_KEY     # use the test-mode key (sk_test_...) until you're ready to go live
+  npx wrangler secret put STRIPE_PRICE_ID
+  npx wrangler secret put STRIPE_WEBHOOK_SECRET  # from the webhook endpoint below
+  ```
+  In the Stripe dashboard, add a webhook endpoint. For local testing, use the
+  [Stripe CLI](https://stripe.com/docs/stripe-cli) instead of a real endpoint
+  URL: `stripe listen --forward-to http://127.0.0.1:8787/internal/stripe/webhook`
+  (it prints a `whsec_...` value — use that as `STRIPE_WEBHOOK_SECRET` for
+  local testing). Only point Stripe's webhook at the real
+  `https://springr.co.uk/internal/stripe/webhook` once you're actually ready
+  to accept real payments — subscribed to `checkout.session.completed`,
+  `customer.subscription.updated`, `customer.subscription.deleted`.
+- **Anthropic**: get an API key from [console.anthropic.com](https://console.anthropic.com) for the LLM content-feedback step:
+  ```bash
+  npx wrangler secret put ANTHROPIC_API_KEY
+  ```
+- **Workers AI**: no extra setup — the `AI` binding in `wrangler.toml` just
+  works, but note it always calls Cloudflare's real Workers AI service, even
+  from `wrangler dev` — it isn't emulated locally like D1/R2 are, so
+  transcription calls made while testing do count toward Workers AI usage.
+
+No audio or video is ever stored — only the transcript and computed feedback
+are saved. See the plan notes in this repo's history for the full design.
+
 ## Local development
 
 ```bash
