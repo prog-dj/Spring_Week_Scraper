@@ -851,7 +851,7 @@ const PRACTICE_MODULES = [
 let practiceState = { moduleId: null, question: null, score: 0, streak: 0, promptsReviewed: 0, durationSeconds: 60, remainingSeconds: 0, timerId: null, finished: false };
 
 function renderPracticeModules() {
-  $('#practice-modules').innerHTML = PRACTICE_MODULES.map((m) => `<article class="practice-module-card${m.type === 'coming-soon' ? ' coming-soon' : ''}" data-practice-module="${m.id}">${m.badge ? `<span class="practice-module-badge">${m.badge}</span>` : ''}<h3>${m.title}</h3><p>${m.blurb}</p><span class="text-button">${m.type === 'coming-soon' ? 'Notify me' : 'Start'} <span>→</span></span></article>`).join('');
+  $('#practice-modules').innerHTML = PRACTICE_MODULES.map((m) => `<article class="practice-module-card${m.type === 'coming-soon' ? ' coming-soon' : ''}" data-practice-module="${m.id}">${m.badge ? `<span class="practice-module-badge">${m.badge}</span>` : ''}<h3>${m.title}</h3><p>${m.blurb}</p><span class="text-button">${m.type === 'coming-soon' ? 'Find out more' : 'Start'} <span>→</span></span></article>`).join('');
 }
 
 function currentPracticeModule() {
