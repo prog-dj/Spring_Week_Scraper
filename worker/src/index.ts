@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { withSentry } from "@sentry/cloudflare";
 import type { HonoEnv, Env } from "./types";
-import { loadCurrentUser, requireAuth, requireAdmin } from "./auth/middleware";
+import { loadCurrentUser, requireAuth, requireAdmin, requireSubscription } from "./auth/middleware";
 import { authRoutes } from "./routes/auth";
 import { apiRoutes } from "./routes/api";
 import { workspaceRoutes } from "./routes/workspace";
@@ -11,6 +11,9 @@ import { documentsRoutes } from "./routes/documents";
 import { adminRoutes } from "./routes/admin";
 import { ingestRoutes } from "./routes/ingest";
 import { accountRoutes } from "./routes/account";
+import { billingRoutes } from "./routes/billing";
+import { stripeWebhookRoutes } from "./routes/stripeWebhook";
+import { interviewRoutes } from "./routes/interview";
 
 const app = new Hono<HonoEnv>({ strict: false });
 
@@ -26,7 +29,9 @@ app.use("*", async (c, next) => {
     "Content-Security-Policy",
     "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   );
-  c.header("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  // camera/microphone allowed for same-origin only -- needed for Interview
+  // Practice's recording flow; everything else stays locked down.
+  c.header("Permissions-Policy", "geolocation=(), microphone=(self), camera=(self)");
 });
 
 app.use("*", loadCurrentUser);
@@ -38,8 +43,14 @@ app.route("/api/applications", new Hono<HonoEnv>({ strict: false }).use("*", req
 app.route("/api/saved", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", savedRoutes));
 app.route("/api/documents", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", documentsRoutes));
 app.route("/api/account", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", accountRoutes));
+app.route("/api/billing", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", billingRoutes));
+app.route(
+  "/api/interview",
+  new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).use("*", requireSubscription).route("/", interviewRoutes)
+);
 app.route("/api", new Hono<HonoEnv>({ strict: false }).use("*", requireAdmin).route("/", adminRoutes));
 app.route("/internal/ingest", ingestRoutes);
+app.route("/internal/stripe/webhook", stripeWebhookRoutes);
 
 // Anything else falls through to the static frontend (static/index.html,
 // app.js, styles.css) via the Workers Static Assets binding.

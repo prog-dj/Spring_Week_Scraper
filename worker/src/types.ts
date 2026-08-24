@@ -2,12 +2,21 @@ export type Env = {
   DB: D1Database;
   DOCUMENTS: R2Bucket;
   ASSETS: Fetcher;
+  AI: Ai;
 
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;
   ADMIN_EMAILS: string;
   INGEST_SHARED_SECRET: string;
+
+  // Interview Practice (paid feature): Stripe billing + Anthropic feedback.
+  // Unset locally is fine during early dev, but the routes that need these
+  // will fail loudly rather than silently misbehave -- see routes/billing.ts.
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_PRICE_ID?: string;
+  ANTHROPIC_API_KEY?: string;
 
   // Optional: Sentry error tracking. Unset locally so wrangler dev doesn't
   // report noise; set as a secret in production.

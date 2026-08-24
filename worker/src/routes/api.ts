@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../types";
 import { storedOpportunities, statusHistory, seedFailureRows, utcNow } from "../db/opportunities";
+import { hasActiveSubscription } from "../db/subscriptions";
 
 // Public, read-only endpoints -- no login required. Mirrors the old Flask
 // api/routes.py so the existing frontend keeps working unchanged.
@@ -18,7 +19,7 @@ apiRoutes.get("/health", async (c) => {
   }
 });
 
-apiRoutes.get("/session", (c) => {
+apiRoutes.get("/session", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ authenticated: false });
   return c.json({
@@ -27,6 +28,7 @@ apiRoutes.get("/session", (c) => {
     email: user.email,
     avatarUrl: user.avatar_url,
     isAdmin: Boolean(user.is_admin),
+    hasInterviewPracticeSubscription: await hasActiveSubscription(c.env, user.id),
   });
 });
 

@@ -19,11 +19,18 @@ database_id = "b47083b4-f404-443b-bfbc-511dc8d49f9e"
 binding = "DOCUMENTS"
 bucket_name = "springr-documents"
 
+# Workers AI -- used for Whisper transcription in Interview Practice.
+[ai]
+binding = "AI"
+
 # Secrets (set via `wrangler secret put <NAME>`, never committed):
 #   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET, ADMIN_EMAILS,
 #   INGEST_SHARED_SECRET (the token GitHub Actions uses to push scraped results)
 #   ENVIRONMENT ("production" once deployed -- makes session cookies Secure)
 #   SENTRY_DSN (optional)
+#   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID, ANTHROPIC_API_KEY
+#     (Interview Practice, paid feature -- test-mode values only until this
+#     feature is explicitly approved to go live, see DEPLOY.md)
 #
 # ENVIRONMENT is a secret, not a [vars] entry -- `wrangler deploy` overwrites
 # a secret with any [vars] entry of the same name on every deploy, which

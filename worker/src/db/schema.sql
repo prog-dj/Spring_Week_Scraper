@@ -97,7 +97,33 @@ CREATE TABLE IF NOT EXISTS rate_limits (
     window_started_at TEXT NOT NULL
 );
 
+-- Interview Practice (paid feature). One row per user, updated from Stripe
+-- webhook events -- never trust a client-supplied subscription status.
+CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id),
+    stripe_customer_id TEXT NOT NULL,
+    stripe_subscription_id TEXT,
+    status TEXT NOT NULL DEFAULT 'inactive',
+    current_period_end TEXT,
+    updated_at TEXT NOT NULL
+);
+
+-- Deliberately no audio/video storage_ref column -- recordings are processed
+-- in-memory and discarded; only the transcript and derived feedback persist.
+CREATE TABLE IF NOT EXISTS interview_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    question TEXT NOT NULL,
+    transcript TEXT,
+    duration_seconds INTEGER,
+    words_per_minute INTEGER,
+    filler_word_count INTEGER,
+    llm_feedback TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_status_history_opportunity ON status_history(opportunity_id);
 CREATE INDEX IF NOT EXISTS idx_applications_user ON applications(user_id);
 CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_saved_opportunities_user ON saved_opportunities(user_id);
+CREATE INDEX IF NOT EXISTS idx_interview_attempts_user ON interview_attempts(user_id);
