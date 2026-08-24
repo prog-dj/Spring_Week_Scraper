@@ -226,8 +226,12 @@ def _build_opportunity(candidate: dict, http_status: int | None, text: str, rend
         sector = infer_sector(f"{title_hint} {text}")
         opp_type = opportunity_type(title_hint, text)
         process = extract_application_process(text)
-        identity_eligibility = extract_identity_eligibility(f"{title_hint} {text}")
-        eligibility = list(dict.fromkeys(identity_eligibility + (extract_eligibility(text) or [])))[:6] or None
+        # Title-only, not the full page body: a page's nav/footer routinely
+        # links to the company's *other* diversity programmes ("Black Heritage
+        # Initiatives", etc.), which would otherwise get misattributed as this
+        # specific programme's eligibility. The title/programme name is a much
+        # more reliable, page-specific signal.
+        eligibility = list(dict.fromkeys(title_identity_eligibility + (extract_eligibility(text) or [])))[:6] or None
         programme_format = extract_format(text)
         programme_name = section_label or extract_programme(candidate.get("title", ""), candidate.get("snippet", ""))
         base.update({"company": _company_for(candidate), "programme": programme_name, "sector": sector, "location": infer_location(text), "deadline": deadline, "programme_dates": programme_dates, "status": status, "confidence": confidence, "evidence": evidence, "evidence_excerpt": evidence_excerpt(text, status, deadline), "application_process": json.dumps(process) if process else None, "eligibility": json.dumps(eligibility) if eligibility else None, "format": programme_format, "logo": _company_for(candidate)[:3].upper(), "logo_class": sector_logo_class(sector), "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(f"{title_hint} {text}")), "opportunity_type": opp_type})
