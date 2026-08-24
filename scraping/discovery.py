@@ -37,6 +37,7 @@ from scraping.extraction import (
     extract_deadline,
     extract_eligibility,
     extract_format,
+    extract_identity_eligibility,
     extract_programme,
     extract_programme_dates,
     infer_location,
@@ -211,7 +212,11 @@ def _build_opportunity(candidate: dict, http_status: int | None, text: str, rend
     title_hint = section_label or candidate.get("title", "")
     initial_type = opportunity_type(title_hint, candidate.get("snippet", ""))
     initial_sector = infer_sector(title_hint)
-    base = {"id": _section_id(candidate["url"], section_label), "company": _company_for(candidate), "programme": section_label or extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": initial_sector, "location": None, "opportunity_url": url, "source_url": candidate["url"], "discovered_via": candidate["discovered_via"], "deadline": None, "programme_dates": None, "status": "unknown", "confidence": "low", "evidence": "Source could not be verified", "evidence_excerpt": None, "application_process": None, "eligibility": None, "format": None, "http_status": http_status, "checked_at": checked_at, "last_error": None, "logo": "?", "logo_class": "", "opportunity_type": initial_type, "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(title_hint))}
+    # Diversity-scheme naming ("Women in Banking", "Black Heritage Programme")
+    # is often stated only in the title, never repeated in the page body -- so
+    # this is checked even when verification below fails entirely.
+    title_identity_eligibility = extract_identity_eligibility(title_hint)
+    base = {"id": _section_id(candidate["url"], section_label), "company": _company_for(candidate), "programme": section_label or extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": initial_sector, "location": None, "opportunity_url": url, "source_url": candidate["url"], "discovered_via": candidate["discovered_via"], "deadline": None, "programme_dates": None, "status": "unknown", "confidence": "low", "evidence": "Source could not be verified", "evidence_excerpt": None, "application_process": None, "eligibility": json.dumps(title_identity_eligibility) if title_identity_eligibility else None, "format": None, "http_status": http_status, "checked_at": checked_at, "last_error": None, "logo": "?", "logo_class": "", "opportunity_type": initial_type, "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(title_hint))}
     try:
         if len(text) < 100:
             raise RuntimeError(f"verification returned too little page text (HTTP {http_status})")
@@ -221,7 +226,8 @@ def _build_opportunity(candidate: dict, http_status: int | None, text: str, rend
         sector = infer_sector(f"{title_hint} {text}")
         opp_type = opportunity_type(title_hint, text)
         process = extract_application_process(text)
-        eligibility = extract_eligibility(text)
+        identity_eligibility = extract_identity_eligibility(f"{title_hint} {text}")
+        eligibility = list(dict.fromkeys(identity_eligibility + (extract_eligibility(text) or [])))[:6] or None
         programme_format = extract_format(text)
         programme_name = section_label or extract_programme(candidate.get("title", ""), candidate.get("snippet", ""))
         base.update({"company": _company_for(candidate), "programme": programme_name, "sector": sector, "location": infer_location(text), "deadline": deadline, "programme_dates": programme_dates, "status": status, "confidence": confidence, "evidence": evidence, "evidence_excerpt": evidence_excerpt(text, status, deadline), "application_process": json.dumps(process) if process else None, "eligibility": json.dumps(eligibility) if eligibility else None, "format": programme_format, "logo": _company_for(candidate)[:3].upper(), "logo_class": sector_logo_class(sector), "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(f"{title_hint} {text}")), "opportunity_type": opp_type})

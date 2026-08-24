@@ -187,6 +187,28 @@ def extract_eligibility(text: str) -> list[str] | None:
     return found[:5] if found else None
 
 
+# Diversity-scheme naming is often the *only* signal a programme is
+# identity-restricted -- e.g. "Women in Banking Insight Day" rarely repeats
+# "for women" anywhere in the page body, the programme name is the eligibility
+# statement. So this runs against the title/programme name as well as body
+# text, not just body text like ELIGIBILITY_PATTERNS above. Patterns are
+# anchored on how these schemes are actually named in the UK market (word
+# boundaries + a scheme-ish qualifier) rather than bare group names, to avoid
+# false positives like "Asian markets desk" or "black-box testing".
+IDENTITY_ELIGIBILITY_PATTERNS = (
+    ("Women", r"\bwomen'?s\b|\bwomen in\b|\bfor women\b|\bfemale[- ]only\b"),
+    ("Black students", r"\bblack heritage\b|\bblack (?:student|talent|professional|future|scholar)s?\b|\bfor black\b"),
+    ("Asian heritage students", r"\basian heritage\b|\bfor asian\b"),
+    ("Mixed heritage students", r"\bmixed heritage\b"),
+    ("BAME / ethnic minority students", r"\bbame\b|\bethnic minorit(?:y|ies)\b|\bunderrepresented (?:ethnic|racial) (?:group|minorit)"),
+)
+
+
+def extract_identity_eligibility(text: str) -> list[str]:
+    lowered = text.lower()
+    return [label for label, pattern in IDENTITY_ELIGIBILITY_PATTERNS if re.search(pattern, lowered)]
+
+
 FORMAT_PATTERNS = (
     ("Hybrid", r"hybrid (?:format|programme|program|event|week)"),
     ("Virtual", r"virtual (?:programme|program|insight|event|week)|conducted virtually|held virtually|takes place virtually"),
