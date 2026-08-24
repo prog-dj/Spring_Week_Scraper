@@ -166,7 +166,9 @@ async function toggleSaved(opportunityId) {
   }
 }
 
-function navigate(viewName) {
+const VALID_VIEWS = ['overview', 'opportunities', 'applications', 'practice', 'documents'];
+
+function navigate(viewName, { scroll = true } = {}) {
   $$('.view').forEach((view) => view.classList.toggle('active', view.id === `${viewName}-view`));
   $$('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === viewName));
   const mobileNavSelect = $('#mobile-nav-select');
@@ -176,7 +178,11 @@ function navigate(viewName) {
   if (viewName === 'opportunities') renderOpportunities();
   if (viewName === 'applications') renderApplications();
   if (viewName === 'documents') renderDocuments();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Persist the current tab in the URL hash so a refresh (or a shared link)
+  // lands back on the same view instead of always resetting to Overview.
+  // replaceState avoids piling up back-button history entries for every click.
+  history.replaceState(null, '', viewName === 'overview' ? window.location.pathname : `#${viewName}`);
+  if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Mirrors worker/src/db/applications.ts VALID_STATUSES -- keep in sync.
@@ -1004,7 +1010,18 @@ async function boot() {
   if (user?.isAdmin) loadAdminStats();
   renderOverview(); renderOpportunities(); renderApplications(); renderDocuments(); renderPracticeModules(); bindEvents();
   initCookieBanner();
+  const requestedView = window.location.hash.slice(1);
+  if (VALID_VIEWS.includes(requestedView)) navigate(requestedView, { scroll: false });
   loadOpportunities();
 }
+
+// Fires when the hash changes without a full reload -- e.g. a user editing
+// the URL bar directly, or clicking a link elsewhere in the app that points
+// at a hash (in-app tab switches use history.replaceState, which doesn't
+// trigger this, so there's no double-navigate loop here).
+window.addEventListener('hashchange', () => {
+  const requestedView = window.location.hash.slice(1);
+  navigate(VALID_VIEWS.includes(requestedView) ? requestedView : 'overview', { scroll: false });
+});
 
 boot();
