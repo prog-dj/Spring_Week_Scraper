@@ -370,10 +370,44 @@ def verify_candidates(candidates: list[dict]) -> list[dict]:
     return flat_results
 
 
+_PROGRAMME_NAME_STOPWORDS = {"programme", "program", "the", "a", "an", "for", "at", "in", "on", "of", "and", "careers", "overview", "day", "days"}
+
+
+def _programme_signature(programme: str, company: str) -> set[str]:
+    """Significant words in a programme name, with generic site/company
+    boilerplate stripped out. Used to catch the same real programme discovered
+    via two different pages (e.g. a dedicated sub-page and a section split out
+    of a general careers-overview page), which frequently get classified with
+    different opportunity_type labels since that classifier only sees each
+    page's own local wording."""
+    company_words = set(re.sub(r"[^a-z0-9\s]", " ", company.lower()).split())
+    words = re.sub(r"[^a-z0-9\s]", " ", programme.lower()).split()
+    return {w for w in words if w not in _PROGRAMME_NAME_STOPWORDS and w not in company_words and len(w) > 2}
+
+
+def _same_programme(a: dict, b: dict) -> bool:
+    if a["opportunity_type"] == b["opportunity_type"]:
+        return True
+    sig_a = _programme_signature(a["programme"], a["company"])
+    sig_b = _programme_signature(b["programme"], b["company"])
+    if not sig_a or not sig_b:
+        return False
+    overlap = sig_a & sig_b
+    union = sig_a | sig_b
+    # 0.6, not 0.5 -- high enough to catch "Spring Insight Programme" vs "Spring
+    # Week/Insight" (2/3 words shared) without also merging two genuinely
+    # distinct same-company programmes that just happen to share one generic
+    # word, e.g. "Trading Insight Week" vs "Technology Insight Week" (2/4 shared).
+    return len(overlap) / len(union) >= 0.6
+
+
 def dedupe_opportunities(items: list[dict]) -> list[dict]:
     """Collapse entries that describe the same opportunity but were discovered at
-    different URLs (e.g. an employer page and a syndicated copy of it), keeping the
-    one with the best source and evidence."""
+    different URLs (e.g. an employer's dedicated programme page and a section
+    split out of their general careers-overview page), keeping the one with the
+    best source and evidence. Grouped by company, then clustered within each
+    company by fuzzy programme-name similarity rather than an exact
+    opportunity_type match -- see _same_programme."""
     source_rank = {"employer": 2, "unknown": 1, "aggregator": 0}
     confidence_rank = {"high": 2, "medium": 1, "low": 0}
 
@@ -384,13 +418,21 @@ def dedupe_opportunities(items: list[dict]) -> list[dict]:
             len(item.get("evidence_excerpt") or ""),
         )
 
-    best: dict[tuple[str, str], dict] = {}
+    by_company: dict[str, list[dict]] = {}
     for item in items:
-        key = (normalize_company(item["company"]), item["opportunity_type"])
-        current = best.get(key)
-        if current is None or score(item) > score(current):
-            best[key] = item
-    return list(best.values())
+        by_company.setdefault(normalize_company(item["company"]), []).append(item)
+
+    deduped: list[dict] = []
+    for group in by_company.values():
+        clusters: list[list[dict]] = []
+        for item in group:
+            cluster = next((c for c in clusters if _same_programme(item, c[0])), None)
+            if cluster is not None:
+                cluster.append(item)
+            else:
+                clusters.append([item])
+        deduped.extend(max(cluster, key=score) for cluster in clusters)
+    return deduped
 
 
 # The old in-process discover_and_refresh()/scheduler() pair is gone -- that
