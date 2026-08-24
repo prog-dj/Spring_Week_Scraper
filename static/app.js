@@ -426,7 +426,13 @@ function renderDocuments() {
 }
 
 function openModal(content) { $('#modal-content').innerHTML = content; $('#modal-backdrop').hidden = false; }
-function closeModal() { $('#modal-backdrop').hidden = true; }
+function closeModal() {
+  // Guards against the camera/mic staying on if someone closes the modal via
+  // the X button or backdrop click mid-interview, rather than the flow's own
+  // "End session" buttons (which already clean this up before calling closeModal).
+  if (typeof interviewState !== 'undefined' && interviewState) { stopInterviewMedia(); interviewState = null; }
+  $('#modal-backdrop').hidden = true;
+}
 function openOpportunity(id) {
   const item = getOpportunity(id);
   if (!item) { showToast('This opportunity is not in the current live dataset'); return; }
@@ -614,6 +620,7 @@ function bindEvents() {
   $('#practice-answer-input').addEventListener('input', handlePracticeAnswerInput);
   $('#practice-answer-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); handlePracticeSubmit(); } });
   $('#export-data-button').addEventListener('click', exportAccountData);
+  $('#manage-subscription-button').addEventListener('click', openInterviewManageSubscription);
   $('#delete-account-button').addEventListener('click', confirmDeleteAccount);
   $('#cookie-ack-button').addEventListener('click', dismissCookieBanner);
 }
@@ -845,7 +852,7 @@ const PRACTICE_MODULES = [
   { id: 'probability', title: 'Probability & EV', blurb: 'Dice, coins, cards, and expected value.', type: 'numeric', generate: genProbability },
   { id: 'sequences', title: 'Number Sequences', blurb: 'Spot the pattern, name the next term.', type: 'numeric', generate: genSequence },
   { id: 'sizing', title: 'Market Sizing', blurb: 'Classic guesstimate prompts with a structuring framework.', type: 'reveal', generate: genSizing },
-  { id: 'interview', title: 'Interview Practice', blurb: 'Record yourself answering real interview questions, HireVue-style, with feedback on delivery.', type: 'coming-soon', badge: 'Coming soon · Paid' },
+  { id: 'interview', title: 'Interview Practice', blurb: 'Record yourself answering real interview questions, HireVue-style, with feedback on delivery.', type: 'subscription', badge: 'Paid' },
 ];
 
 let practiceState = { moduleId: null, question: null, score: 0, streak: 0, promptsReviewed: 0, durationSeconds: 60, remainingSeconds: 0, timerId: null, finished: false };
@@ -863,6 +870,12 @@ function startPracticeModule(moduleId) {
   if (module.type === 'coming-soon') {
     openModal(`<span class="eyebrow">COMING SOON · PAID FEATURE</span><h2>${module.title}</h2><p>${module.blurb}</p><p>We're building a HireVue-style simulated video interview -- record timed answers to real interview questions and get feedback on delivery, not just content. This will be a paid add-on once it launches.</p><button class="primary-button full-width" id="practice-coming-soon-close">Got it</button>`);
     $('#practice-coming-soon-close').addEventListener('click', closeModal);
+    return;
+  }
+  if (module.type === 'subscription') {
+    if (!requireLogin('Sign in to try Interview Practice.')) return;
+    if (!state.user.hasInterviewPracticeSubscription) { openInterviewPaywall(); return; }
+    openInterviewSectorPicker();
     return;
   }
   clearInterval(practiceState.timerId);
@@ -1005,6 +1018,149 @@ function finishPracticeSession() {
   $('#practice-results-summary').textContent = module.type === 'reveal'
     ? `You reviewed ${practiceState.promptsReviewed} prompt${practiceState.promptsReviewed === 1 ? '' : 's'} in ${durationLabel}.`
     : `You solved ${practiceState.score} problem${practiceState.score === 1 ? '' : 's'} in ${durationLabel}.`;
+}
+
+// --- Interview Practice (paid): sector-specific simulated video interview --
+const INTERVIEW_SECTORS = ['Investment Banking', 'Asset Management', 'Trading & Quant', 'Consulting', 'Technology', 'Law'];
+const INTERVIEW_PREP_SECONDS = 30;
+const INTERVIEW_MAX_RECORD_SECONDS = 120;
+
+let interviewState = null; // set only while the modal-driven interview flow is active
+
+function openInterviewPaywall() {
+  openModal('<span class="eyebrow">INTERVIEW PRACTICE · PAID</span><h2>Subscribe to unlock simulated interviews</h2><p>Record timed answers to real, sector-specific interview questions and get feedback on both delivery (pacing, filler words) and content, powered by AI. Cancel anytime.</p><button class="primary-button full-width" id="interview-subscribe-button">Subscribe <span>→</span></button><button class="secondary-button full-width" id="interview-paywall-cancel" style="margin-top:8px">Not now</button>');
+  $('#interview-paywall-cancel').addEventListener('click', closeModal);
+  $('#interview-subscribe-button').addEventListener('click', async (event) => {
+    event.target.textContent = 'Redirecting…';
+    try {
+      const response = await fetch('/api/billing/checkout', { method: 'POST' });
+      const payload = await response.json();
+      if (!response.ok || !payload.url) throw new Error(payload.error || 'checkout failed');
+      window.location.href = payload.url;
+    } catch (error) {
+      showToast(error.message || 'Could not start checkout');
+      event.target.textContent = 'Subscribe';
+    }
+  });
+}
+
+async function openInterviewManageSubscription() {
+  try {
+    const response = await fetch('/api/billing/portal', { method: 'POST' });
+    const payload = await response.json();
+    if (!response.ok || !payload.url) throw new Error(payload.error || 'could not open billing portal');
+    window.location.href = payload.url;
+  } catch (error) {
+    showToast(error.message || 'Could not open billing portal');
+  }
+}
+
+function openInterviewSectorPicker() {
+  openModal(`<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Which field are you practising for?</h2><p>Questions are tailored to the sector you pick.</p><div class="modal-form"><select id="interview-sector-select">${INTERVIEW_SECTORS.map((s) => `<option value="${s}">${s}</option>`).join('')}</select><button class="primary-button full-width" id="interview-sector-start">Start <span>→</span></button></div>`);
+  $('#interview-sector-start').addEventListener('click', () => beginInterviewSession($('#interview-sector-select').value));
+}
+
+async function beginInterviewSession(sector) {
+  openModal('<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Setting up…</h2><p>Requesting camera and microphone access.</p>');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const response = await fetch(`/api/interview/questions?sector=${encodeURIComponent(sector)}`);
+    if (!response.ok) throw new Error('could not load questions');
+    const payload = await response.json();
+    interviewState = { stream, questions: payload.questions || [], questionIndex: 0, prepTimerId: null, recordTimerId: null, mediaRecorder: null, chunks: [], recordStartedAt: null };
+    showInterviewQuestion();
+  } catch (error) {
+    openModal(`<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Camera/microphone access needed</h2><p>${error.name === 'NotAllowedError' ? 'Please allow camera and microphone access in your browser to use this feature.' : 'Something went wrong setting up the interview.'}</p><button class="secondary-button full-width" id="interview-setup-close">Close</button>`);
+    $('#interview-setup-close').addEventListener('click', closeModal);
+  }
+}
+
+function stopInterviewMedia() {
+  if (interviewState?.stream) interviewState.stream.getTracks().forEach((track) => track.stop());
+  if (interviewState?.mediaRecorder && interviewState.mediaRecorder.state !== 'inactive') interviewState.mediaRecorder.stop();
+  clearInterval(interviewState?.prepTimerId);
+  clearInterval(interviewState?.recordTimerId);
+}
+
+function endInterviewSession() {
+  stopInterviewMedia();
+  interviewState = null;
+  closeModal();
+}
+
+function showInterviewQuestion() {
+  const question = interviewState.questions[interviewState.questionIndex];
+  openModal(`<span class="eyebrow">INTERVIEW PRACTICE · QUESTION ${interviewState.questionIndex + 1} OF ${interviewState.questions.length}</span><h2>${question}</h2><video id="interview-preview" autoplay muted playsinline class="interview-preview"></video><p id="interview-prep-timer">Get ready… recording starts in <strong>${INTERVIEW_PREP_SECONDS}</strong>s</p><button class="primary-button full-width" id="interview-skip-prep">Start recording now <span>→</span></button><button class="secondary-button full-width" id="interview-end-session" style="margin-top:8px">End session</button>`);
+  $('#interview-preview').srcObject = interviewState.stream;
+  $('#interview-end-session').addEventListener('click', endInterviewSession);
+  $('#interview-skip-prep').addEventListener('click', () => { clearInterval(interviewState.prepTimerId); startInterviewRecording(question); });
+
+  let remaining = INTERVIEW_PREP_SECONDS;
+  interviewState.prepTimerId = setInterval(() => {
+    remaining -= 1;
+    const timerEl = $('#interview-prep-timer strong');
+    if (timerEl) timerEl.textContent = String(remaining);
+    if (remaining <= 0) { clearInterval(interviewState.prepTimerId); startInterviewRecording(question); }
+  }, 1000);
+}
+
+function pickAudioMimeType() {
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+  return candidates.find((type) => window.MediaRecorder && MediaRecorder.isTypeSupported(type)) || '';
+}
+
+function startInterviewRecording(question) {
+  const audioOnlyStream = new MediaStream(interviewState.stream.getAudioTracks());
+  const mimeType = pickAudioMimeType();
+  const mediaRecorder = mimeType ? new MediaRecorder(audioOnlyStream, { mimeType }) : new MediaRecorder(audioOnlyStream);
+  interviewState.mediaRecorder = mediaRecorder;
+  interviewState.chunks = [];
+  interviewState.recordStartedAt = Date.now();
+  mediaRecorder.addEventListener('dataavailable', (event) => { if (event.data.size > 0) interviewState.chunks.push(event.data); });
+  mediaRecorder.addEventListener('stop', () => submitInterviewAttempt(question, mediaRecorder.mimeType || mimeType || 'audio/webm'));
+  mediaRecorder.start();
+
+  openModal(`<span class="eyebrow">INTERVIEW PRACTICE · RECORDING</span><h2>${question}</h2><video id="interview-preview" autoplay muted playsinline class="interview-preview"></video><p>Recording… <strong id="interview-record-timer">0:00</strong> / ${Math.floor(INTERVIEW_MAX_RECORD_SECONDS / 60)}:${String(INTERVIEW_MAX_RECORD_SECONDS % 60).padStart(2, '0')}</p><button class="primary-button full-width" id="interview-stop-recording">Stop &amp; submit <span>→</span></button>`);
+  $('#interview-preview').srcObject = interviewState.stream;
+  $('#interview-stop-recording').addEventListener('click', () => { clearInterval(interviewState.recordTimerId); mediaRecorder.stop(); });
+
+  let elapsed = 0;
+  interviewState.recordTimerId = setInterval(() => {
+    elapsed += 1;
+    const timerEl = $('#interview-record-timer');
+    if (timerEl) timerEl.textContent = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
+    if (elapsed >= INTERVIEW_MAX_RECORD_SECONDS) { clearInterval(interviewState.recordTimerId); mediaRecorder.stop(); }
+  }, 1000);
+}
+
+async function submitInterviewAttempt(question, mimeType) {
+  const durationSeconds = Math.max(1, Math.round((Date.now() - interviewState.recordStartedAt) / 1000));
+  const audioBlob = new Blob(interviewState.chunks, { type: mimeType });
+  openModal('<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Analysing your answer…</h2><p>Transcribing and generating feedback -- this can take up to a minute.</p>');
+
+  const form = new FormData();
+  form.append('audio', audioBlob, 'answer.webm');
+  form.append('question', question);
+  form.append('duration_seconds', String(durationSeconds));
+
+  try {
+    const response = await fetch('/api/interview/attempts', { method: 'POST', body: form });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'could not process this recording');
+    showInterviewFeedback(payload.attempt);
+  } catch (error) {
+    openModal(`<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Something went wrong</h2><p>${error.message}</p><button class="secondary-button full-width" id="interview-error-close">Close</button>`);
+    $('#interview-error-close').addEventListener('click', endInterviewSession);
+  }
+}
+
+function showInterviewFeedback(attempt) {
+  const hasMore = interviewState.questionIndex + 1 < interviewState.questions.length;
+  openModal(`<span class="eyebrow">INTERVIEW PRACTICE · FEEDBACK</span><h2>${attempt.question}</h2><div class="interview-feedback-card"><div class="interview-feedback-stats"><span>Pace<strong>${attempt.words_per_minute} wpm</strong></span><span>Filler words<strong>${attempt.filler_word_count}</strong></span><span>Length<strong>${attempt.duration_seconds}s</strong></span></div><label>What you said</label><p class="workspace-list">${attempt.transcript}</p><label>Feedback</label><p class="workspace-list">${attempt.llm_feedback.replace(/\n/g, '<br>')}</p></div><button class="primary-button full-width" id="interview-next-question">${hasMore ? 'Next question' : 'Finish'} <span>→</span></button><button class="secondary-button full-width" id="interview-finish-session" style="margin-top:8px">End session</button>`);
+  $('#interview-finish-session').addEventListener('click', endInterviewSession);
+  $('#interview-next-question').addEventListener('click', () => {
+    if (hasMore) { interviewState.questionIndex += 1; showInterviewQuestion(); } else { endInterviewSession(); }
+  });
 }
 
 async function boot() {

@@ -9,6 +9,13 @@ compatibility_flags = ["nodejs_compat"]
 directory = "../static"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+# Without this, static assets (index.html, app.js, styles.css) are served
+# directly by the assets layer and never reach index.ts's Worker script at
+# all -- meaning the security headers middleware (CSP, X-Frame-Options,
+# Permissions-Policy) silently never applied to the actual page, only to
+# JSON API responses. run_worker_first makes every request hit the Worker
+# first, which then falls through to ASSETS.fetch() for the file itself.
+run_worker_first = true
 
 [[d1_databases]]
 binding = "DB"
