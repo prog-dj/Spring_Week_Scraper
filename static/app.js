@@ -678,7 +678,7 @@ function genArithmetic() {
   const op = pick(['+', '−', '×', '÷']);
   let a, b, answer;
   if (op === '+') { a = randInt(2, 100); b = randInt(2, 100); answer = a + b; }
-  else if (op === '−') { a = randInt(2, 100); b = randInt(2, 100); answer = a - b; }
+  else if (op === '−') { a = randInt(3, 100); b = randInt(2, a - 1); answer = a - b; }
   else if (op === '×') { a = randInt(2, 12); b = randInt(2, 100); answer = a * b; }
   else { b = randInt(2, 12); answer = randInt(2, 100); a = b * answer; }
   return {
