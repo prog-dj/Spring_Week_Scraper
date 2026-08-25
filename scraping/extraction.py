@@ -33,7 +33,26 @@ def clean_text(html: str) -> str:
     return re.sub(r"\s+", " ", soup.get_text(" ", strip=True)).strip()
 
 
-def extract_company(title: str, url: str) -> str:
+# Degree apprenticeship employer domains not already covered by
+# extract_company's spring-week known_domains map.
+DA_KNOWN_DOMAINS = {
+    "arm.com": "Arm", "baesystems.com": "BAE Systems", "rolls-royce.com": "Rolls-Royce",
+    "mercedes-benz.co.uk": "Mercedes-Benz", "cgi.com": "CGI", "kier.co.uk": "Kier",
+}
+
+# Generic listing-page phrasing that shows up as a page <title> but is never a
+# real company name -- either a job-board's own SEO phrasing ("X Jobs (with
+# Salaries)") or a careers-hub page that covers many roles/employers at once
+# ("Apprenticeships", "Search apprenticeships"). Checked in addition to the
+# spring-week generic_titles/insight-programme guard below so DA titles fall
+# back to the host-derived name instead of keeping this boilerplate verbatim.
+DA_GENERIC_TITLE_TERMS = (
+    "apprenticeship", "apprenticeships", "jobs", "with salaries", "vacancies",
+    "search", "degree apprenticeship", "degree apprenticeships",
+)
+
+
+def extract_company(title: str, url: str, category: str = "spring_week") -> str:
     host = urlparse(url).netloc.lower()
     known_domains = {
         "jpmorganchase.com": "J.P. Morgan", "blackrock.com": "BlackRock",
@@ -46,13 +65,17 @@ def extract_company(title: str, url: str) -> str:
         "db.com": "Deutsche Bank", "hsbc.com": "HSBC", "deloitte.com": "Deloitte",
         "freshfields.com": "Freshfields", "mckinsey.com": "McKinsey & Company",
         "jobs.barclays": "Barclays", "gibsondunn.com": "Gibson Dunn",
+        **(DA_KNOWN_DOMAINS if category == "degree_apprenticeship" else {}),
     }
     for domain, company in known_domains.items():
         if host == domain or host.endswith(f".{domain}"):
             return company
     generic_titles = ("students", "law students", "graduates", "careers", "early careers", "students and graduates")
     cleaned = re.sub(r"\s*[-|:–—].*$", "", title).strip()
-    if cleaned and cleaned.lower() not in generic_titles and not any(term in cleaned.lower() for term in ("spring", "insight", "programme", "program", "week")):
+    generic_terms = ("spring", "insight", "programme", "program", "week")
+    if category == "degree_apprenticeship":
+        generic_terms = DA_GENERIC_TITLE_TERMS
+    if cleaned and cleaned.lower() not in generic_titles and not any(term in cleaned.lower() for term in generic_terms):
         return cleaned
     return host.removeprefix("www.").split(".")[0].replace("-", " ").title()
 
@@ -102,6 +125,30 @@ def infer_sector(text: str) -> str:
         "Consulting": ("consult",),
         "Technology": ("technology", "engineering", "software"),
         "Law": ("law firm", "trainee solicitor", "training contract", "legal practice", "qualified solicitor"),
+    }
+    matched = [sector for sector in sector_order if any(term in lowered for term in sector_terms[sector])]
+    return ", ".join(matched) if matched else "Other"
+
+
+# Degree Apprenticeships get their own sector taxonomy -- the UK DA market
+# spans fields (engineering, construction, nursing, policing) that spring
+# weeks never touch, so reusing infer_sector()'s categories wouldn't fit.
+def infer_da_sector(text: str) -> str:
+    lowered = text.lower()
+    sector_order = (
+        "Engineering", "Technology & Digital", "Construction", "Finance & Accounting",
+        "Business & Management", "Law", "Healthcare", "Cyber Security", "Public Sector",
+    )
+    sector_terms = {
+        "Engineering": ("engineering", "manufacturing", "aerospace", "automotive"),
+        "Technology & Digital": ("digital and technology", "software", "data ", "data analyst", "it apprentice"),
+        "Construction": ("construction", "built environment", "civil engineering", "surveying"),
+        "Finance & Accounting": ("accountancy", "accounting", "finance apprentice", "actuarial"),
+        "Business & Management": ("business management", "chartered manager", "hr apprentice", "operations apprentice"),
+        "Law": ("solicitor apprentice", "legal apprentice", "chartered legal executive"),
+        "Healthcare": ("nursing", "nurse apprentice", "healthcare apprentice", "paramedic"),
+        "Cyber Security": ("cyber security", "cybersecurity", "security analyst apprentice"),
+        "Public Sector": ("police constable", "civil service", "policing apprentice"),
     }
     matched = [sector for sector in sector_order if any(term in lowered for term in sector_terms[sector])]
     return ", ".join(matched) if matched else "Other"

@@ -166,16 +166,17 @@ async function toggleSaved(opportunityId) {
   }
 }
 
-const VALID_VIEWS = ['overview', 'opportunities', 'applications', 'practice', 'documents'];
+const VALID_VIEWS = ['overview', 'opportunities', 'degree-apprenticeships', 'applications', 'practice', 'documents'];
 
 function navigate(viewName, { scroll = true } = {}) {
   $$('.view').forEach((view) => view.classList.toggle('active', view.id === `${viewName}-view`));
   $$('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === viewName));
   const mobileNavSelect = $('#mobile-nav-select');
   if (mobileNavSelect) mobileNavSelect.value = viewName;
-  const label = ({ overview: 'Overview', opportunities: 'Find opportunities', applications: 'Applications', practice: 'Practice studio', documents: 'Documents' })[viewName];
+  const label = ({ overview: 'Overview', opportunities: 'Spring Weeks', 'degree-apprenticeships': 'Degree Apprenticeships', applications: 'Applications', practice: 'Practice studio', documents: 'Documents' })[viewName];
   $('#page-breadcrumb').textContent = label;
   if (viewName === 'opportunities') renderOpportunities();
+  if (viewName === 'degree-apprenticeships') renderDaOpportunities();
   if (viewName === 'applications') renderApplications();
   if (viewName === 'documents') renderDocuments();
   // Persist the current tab in the URL hash so a refresh (or a shared link)
@@ -301,6 +302,128 @@ function opportunityLockBanner() {
   return `<div class="opportunity-lock-banner"><h3>Sign in to see all ${opportunitiesTotalCount} opportunities</h3><p>Free with Google sign-in -- no card, no catch.</p><a class="primary-button" href="/auth/login">Sign in with Google <span>→</span></a></div>`;
 }
 
+// -- Degree Apprenticeships --------------------------------------------------
+// A parallel, deliberately-duplicated feed from spring-week opportunities --
+// separate state, separate DOM ids, separate localStorage key -- so the two
+// never mix, mirroring the category separation already enforced server-side
+// (see worker/src/routes/degreeApprenticeships.ts).
+let daOpportunityData = [];
+let daDataCheckedAt = null;
+let daDataLoading = true;
+let daOpportunitiesAuthenticated = true;
+let daOpportunitiesTotalCount = 0;
+
+async function loadDaOpportunities() {
+  daDataLoading = true;
+  renderDaOpportunities();
+  try {
+    const response = await fetch('/api/degree-apprenticeships');
+    if (!response.ok) throw new Error(`API returned ${response.status}`);
+    const payload = await response.json();
+    daOpportunityData = payload.opportunities || [];
+    daDataCheckedAt = payload.checkedAt || null;
+    daOpportunitiesAuthenticated = payload.authenticated !== false;
+    daOpportunitiesTotalCount = payload.totalCount ?? daOpportunityData.length;
+    $('#da-source-note').innerHTML = `<span>✓</span> Sources checked ${formatCheckedAt(daDataCheckedAt)} · Official-page results only. Unknown fields stay unknown.`;
+  } catch (error) {
+    daOpportunityData = [];
+    $('#da-source-note').innerHTML = `<span>!</span> Live source check failed. Please try again shortly.`;
+    showToast('Could not reach the live data service');
+  } finally {
+    daDataLoading = false;
+    renderDaOpportunities();
+  }
+}
+
+const getDaOpportunity = (id) => daOpportunityData.find((item) => item.id === id);
+
+let daOpportunityViewMode = 'cards';
+try { daOpportunityViewMode = localStorage.getItem('springr_da_opportunity_view') || 'cards'; } catch (error) { /* private mode etc -- default to cards */ }
+
+function setDaOpportunityViewMode(mode) {
+  daOpportunityViewMode = mode;
+  try { localStorage.setItem('springr_da_opportunity_view', mode); } catch (error) { /* nothing we can do if storage is blocked */ }
+  $$('[data-da-opportunity-view]').forEach((button) => button.classList.toggle('active', button.dataset.daOpportunityView === mode));
+  renderDaOpportunities();
+}
+
+function renderDaOpportunities() {
+  $$('[data-da-opportunity-view]').forEach((button) => button.classList.toggle('active', button.dataset.daOpportunityView === daOpportunityViewMode));
+  $('#da-opportunity-grid').hidden = daOpportunityViewMode !== 'cards';
+  $('#da-opportunity-table-wrap').hidden = daOpportunityViewMode !== 'table';
+
+  if (daDataLoading) {
+    $('#da-opportunity-grid').innerHTML = '<div class="empty-state">Checking official career pages…</div>';
+    $('#da-opportunity-table-body').innerHTML = '';
+    return;
+  }
+  const query = ($('#da-opportunity-search')?.value || '').toLowerCase();
+  const sector = $('#da-sector-filter')?.value || 'all';
+  const status = $('#da-status-filter')?.value || 'all';
+  const filtered = daOpportunityData.filter((item) => {
+    const textMatch = `${item.firm} ${item.sector} ${item.location} ${item.role}`.toLowerCase().includes(query);
+    const sectorMatch = sector === 'all' || (item.sector || '').split(',').map((s) => s.trim()).includes(sector);
+    const statusMatch = status === 'all' || item.status === status || (status === 'saved' && state.saved.includes(item.id));
+    return textMatch && sectorMatch && statusMatch;
+  });
+  const lockedRemainder = daOpportunitiesAuthenticated ? 0 : Math.max(0, daOpportunitiesTotalCount - daOpportunityData.length);
+
+  if (daOpportunityViewMode === 'table') {
+    renderDaOpportunityTable(filtered, lockedRemainder);
+  } else {
+    renderDaOpportunityCards(filtered, lockedRemainder);
+  }
+}
+
+function renderDaOpportunityCards(filtered, lockedRemainder) {
+  const lockedHtml = lockedRemainder ? renderLockedDaOpportunityCards(lockedRemainder) : '';
+  $('#da-opportunity-grid').innerHTML = (filtered.length ? filtered.map((item) => {
+    const saved = state.saved.includes(item.id);
+    const cardFacts = [];
+    if (Array.isArray(item.application_process) && item.application_process.length) {
+      cardFacts.push(`<div class="fact" style="grid-column:1/-1"><label>Application process</label><span>${item.application_process.join(' → ')}</span></div>`);
+    }
+    if (Array.isArray(item.eligibility) && item.eligibility.length) {
+      cardFacts.push(`<div class="fact" style="grid-column:1/-1"><label>Eligibility</label><span>${item.eligibility.join(' · ')}</span></div>`);
+    }
+    if (item.format) {
+      cardFacts.push(`<div class="fact"><label>Format</label><span>${item.format}</span></div>`);
+    }
+    if (item.source_type === 'university') {
+      cardFacts.push(`<div class="fact"><label>Listed by</label><span>University / training provider, not the employer directly</span></div>`);
+    }
+    cardFacts.push(`<div class="fact"><label>Data status</label><span>${item.source}</span></div>`);
+    cardFacts.push(`<div class="fact"><label>Application</label><span>${opportunityStatusLabel(item)}</span></div>`);
+    const subline = item.location ? `${item.type} · ${item.location}` : item.type;
+    const universityBadge = item.source_type === 'university' ? '<span class="university-badge" title="Listed by a university or training provider, not the employer directly">🎓 University listing</span>' : '';
+    return `<article class="opportunity-card"><div class="card-top"><div class="firm-line"><span class="firm-logo ${item.logoClass}">${item.logo}</span><div><strong>${item.firm}</strong><span>${item.sector}</span></div></div><button class="save-button ${saved ? 'saved' : ''}" data-save="${item.id}" aria-label="${saved ? 'Remove from saved' : 'Save'} ${item.firm}">${saved ? '♥' : '♡'}</button></div><h2>${item.role}</h2><span class="role">${subline}</span>${universityBadge}<div class="opportunity-facts">${cardFacts.join('')}</div><div class="card-bottom"><span class="deadline">Deadline: <strong>${item.deadline || 'Not published'}</strong></span><button class="small-button" data-apply="${item.id}">${state.applications.some((application) => application.opportunity_id === item.id) ? 'View application' : 'Track opportunity'}</button></div></article>`;
+  }).join('') : '<div class="empty-state"><strong>No verified degree apprenticeships are available.</strong><p>Try Refresh data after checking that the local scraper server is running.</p></div>') + lockedHtml;
+}
+
+function renderDaOpportunityTable(filtered, lockedRemainder) {
+  const rows = filtered.length ? filtered.map((item) => {
+    const saved = state.saved.includes(item.id);
+    const universityBadge = item.source_type === 'university' ? ' <span class="university-badge" title="Listed by a university or training provider, not the employer directly">🎓</span>' : '';
+    return `<tr><td><span class="firm-logo ${item.logoClass}">${item.logo}</span>${item.firm}${universityBadge}</td><td>${item.role}</td><td>${item.sector || '—'}</td><td>${item.location || '—'}</td><td>${item.deadline || 'Not published'}</td><td><span class="status-pill ${item.status === 'open' ? 'open' : item.status === 'upcoming' ? 'soon' : 'neutral'}">${opportunityStatusLabel(item)}</span></td><td><div class="row-actions"><button class="save-button ${saved ? 'saved' : ''}" data-save="${item.id}" aria-label="${saved ? 'Remove from saved' : 'Save'} ${item.firm}">${saved ? '♥' : '♡'}</button><button class="small-button" data-apply="${item.id}">${state.applications.some((application) => application.opportunity_id === item.id) ? 'View' : 'Track'}</button></div></td></tr>`;
+  }).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>No verified degree apprenticeships are available.</strong><p>Try Refresh data after checking that the local scraper server is running.</p></div></td></tr>';
+  const lockedRows = lockedRemainder ? renderLockedDaOpportunityRows(lockedRemainder) : '';
+  $('#da-opportunity-table-body').innerHTML = rows + lockedRows;
+}
+
+function renderLockedDaOpportunityCards(count) {
+  const placeholders = Array.from({ length: Math.min(count, 6) }, () => `<article class="opportunity-card locked" aria-hidden="true"><div class="card-top"><div class="firm-line"><span class="firm-logo">••</span><div><strong>Firm name</strong><span>Sector</span></div></div></div><h2>Programme name</h2><span class="role">Location</span><div class="opportunity-facts"><div class="fact"><label>Deadline</label><span>••• •••</span></div><div class="fact"><label>Application</label><span>••••••</span></div></div></article>`).join('');
+  return placeholders + daOpportunityLockBanner();
+}
+
+function renderLockedDaOpportunityRows(count) {
+  const placeholders = Array.from({ length: Math.min(count, 6) }, () => `<tr class="locked" aria-hidden="true"><td><span class="firm-logo">••</span>Firm name</td><td>Programme name</td><td>Sector</td><td>Location</td><td>••• •••</td><td>••••••</td><td></td></tr>`).join('');
+  return `${placeholders}<tr><td colspan="7">${daOpportunityLockBanner()}</td></tr>`;
+}
+
+function daOpportunityLockBanner() {
+  return `<div class="opportunity-lock-banner"><h3>Sign in to see all ${daOpportunitiesTotalCount} degree apprenticeships</h3><p>Free with Google sign-in -- no card, no catch.</p><a class="primary-button" href="/auth/login">Sign in with Google <span>→</span></a></div>`;
+}
+
 function renderApplications() {
   $('#application-board').innerHTML = ALL_APPLICATION_STATUSES.map((column) => {
     const applications = state.applications.filter((application) => application.status === column);
@@ -344,7 +467,7 @@ function sankeyStatusColor(status) {
 
 function renderOutcomes(data) {
   if (!data.totalApplications) {
-    $('#outcomes-summary').textContent = 'No applications tracked yet -- track one from Find opportunities to see your outcomes here.';
+    $('#outcomes-summary').textContent = 'No applications tracked yet -- track one from Spring Weeks to see your outcomes here.';
     $('#sankey-wrap').innerHTML = '';
     return;
   }
@@ -553,12 +676,14 @@ function bindEvents() {
   $('#mobile-nav-select').addEventListener('change', (event) => navigate(event.target.value));
   $('#opportunity-search').addEventListener('input', renderOpportunities); $('#sector-filter').addEventListener('change', renderOpportunities); $('#status-filter').addEventListener('change', renderOpportunities);
   $$('[data-opportunity-view]').forEach((button) => button.addEventListener('click', () => setOpportunityViewMode(button.dataset.opportunityView)));
+  $('#da-opportunity-search').addEventListener('input', renderDaOpportunities); $('#da-sector-filter').addEventListener('change', renderDaOpportunities); $('#da-status-filter').addEventListener('change', renderDaOpportunities);
+  $$('[data-da-opportunity-view]').forEach((button) => button.addEventListener('click', () => setDaOpportunityViewMode(button.dataset.daOpportunityView)));
   $$('[data-applications-tab]').forEach((button) => button.addEventListener('click', () => setApplicationsTab(button.dataset.applicationsTab)));
   document.addEventListener('change', (event) => {
     const statusSelect = event.target.closest('[data-status-select]');
     if (statusSelect) handleStatusSelectChange(statusSelect.dataset.statusSelect, statusSelect.value);
   });
-  $('#help-button').addEventListener('click', () => openModal('<span class="eyebrow">QUICK HELP</span><h2>How Springr keeps you moving</h2><p>Use Find opportunities to build your shortlist, Applications to track the next action, and Documents to keep your materials ready.</p><button class="primary-button full-width" id="help-close">Got it</button>'));
+  $('#help-button').addEventListener('click', () => openModal('<span class="eyebrow">QUICK HELP</span><h2>How Springr keeps you moving</h2><p>Use Spring Weeks to build your shortlist, Applications to track the next action, and Documents to keep your materials ready.</p><button class="primary-button full-width" id="help-close">Got it</button>'));
   $('#profile-button').addEventListener('click', () => navigate('documents'));
   $('#logout-button').addEventListener('click', () => { window.location.href = '/auth/logout'; });
   $('#add-document-button').addEventListener('click', () => {
@@ -1023,6 +1148,7 @@ function finishPracticeSession() {
 
 // --- Interview Practice (paid): sector-specific simulated video interview --
 const INTERVIEW_SECTORS = ['Investment Banking', 'Asset Management', 'Trading & Quant', 'Consulting', 'Technology', 'Law'];
+const INTERVIEW_QUESTION_TYPES = ['Behavioural', 'Personal'];
 const INTERVIEW_PREP_SECONDS = 30;
 const INTERVIEW_MAX_RECORD_SECONDS = 120;
 
@@ -1098,7 +1224,7 @@ async function openInterviewSectorPicker() {
   }
 
   const quotaNote = remaining === null ? '' : `<p class="interview-metric-line">${remaining} of 15 practice questions left today</p>`;
-  openModal(`<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Which field are you practising for?</h2><p>Questions are tailored to the sector you pick.</p><div class="modal-form"><select id="interview-sector-select">${INTERVIEW_SECTORS.map((s) => `<option value="${s}">${s}</option>`).join('')}</select><button class="primary-button full-width" id="interview-sector-start">Start <span>→</span></button>${quotaNote}<button class="text-button full-width" id="interview-history-link" style="margin-top:8px">View past feedback</button></div>`);
+  openModal(`<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Which field are you practising for?</h2><p>Questions are tailored to the sector or question type you pick.</p><div class="modal-form"><select id="interview-sector-select"><optgroup label="Sector">${INTERVIEW_SECTORS.map((s) => `<option value="${s}">${s}</option>`).join('')}</optgroup><optgroup label="Question type">${INTERVIEW_QUESTION_TYPES.map((s) => `<option value="${s}">${s}</option>`).join('')}</optgroup></select><button class="primary-button full-width" id="interview-sector-start">Start <span>→</span></button>${quotaNote}<button class="text-button full-width" id="interview-history-link" style="margin-top:8px">View past feedback</button></div>`);
   $('#interview-sector-start').addEventListener('click', () => beginInterviewSession($('#interview-sector-select').value));
   $('#interview-history-link').addEventListener('click', openInterviewHistory);
 }
@@ -1325,11 +1451,12 @@ async function boot() {
   if (user) await loadUserState();
   if (user) await handleCheckoutReturn();
   if (user?.isAdmin) loadAdminStats();
-  renderOverview(); renderOpportunities(); renderApplications(); renderDocuments(); renderPracticeModules(); bindEvents();
+  renderOverview(); renderOpportunities(); renderDaOpportunities(); renderApplications(); renderDocuments(); renderPracticeModules(); bindEvents();
   initCookieBanner();
   const requestedView = window.location.hash.slice(1);
   if (VALID_VIEWS.includes(requestedView)) navigate(requestedView, { scroll: false });
   loadOpportunities();
+  loadDaOpportunities();
 }
 
 // Fires when the hash changes without a full reload -- e.g. a user editing

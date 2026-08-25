@@ -2,9 +2,15 @@
 -- final column state (D1 migrations are applied once via wrangler d1 execute,
 -- no need for the idempotent ALTER-dance the old sqlite3 boot code used).
 
+-- category separates spring-week opportunities from Degree Apprenticeships
+-- (and any future category) sharing this same table -- every query that
+-- reads the "opportunities feed" filters on it explicitly (see
+-- storedOpportunities), so the two never appear mixed together in a listing,
+-- and dedupe/stale-cleanup are category-aware too (see scraping/discovery.py
+-- and worker/src/db/opportunities.ts).
 CREATE TABLE IF NOT EXISTS opportunities (
     id TEXT PRIMARY KEY, company TEXT NOT NULL, programme TEXT NOT NULL,
-    sector TEXT, location TEXT, opportunity_url TEXT NOT NULL UNIQUE,
+    sector TEXT, category TEXT NOT NULL DEFAULT 'spring_week', location TEXT, opportunity_url TEXT NOT NULL UNIQUE,
     source_url TEXT NOT NULL, discovered_via TEXT NOT NULL, deadline TEXT,
     programme_dates TEXT, status TEXT NOT NULL, confidence TEXT NOT NULL,
     evidence TEXT, http_status INTEGER,
@@ -130,6 +136,7 @@ CREATE TABLE IF NOT EXISTS interview_attempts (
     created_at TEXT NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_opportunities_category ON opportunities(category);
 CREATE INDEX IF NOT EXISTS idx_status_history_opportunity ON status_history(opportunity_id);
 CREATE INDEX IF NOT EXISTS idx_applications_user ON applications(user_id);
 CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);

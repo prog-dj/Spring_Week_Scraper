@@ -17,14 +17,16 @@
       <div class="sidebar-label">Workspace</div>
       <nav class="main-nav" aria-label="Main navigation">
         <button class="nav-item active" data-view="overview"><span class="nav-icon">◉</span>Overview</button>
-        <button class="nav-item" data-view="opportunities"><span class="nav-icon">✦</span>Find opportunities</button>
+        <button class="nav-item" data-view="opportunities"><span class="nav-icon">✦</span>Spring Weeks</button>
+        <button class="nav-item" data-view="degree-apprenticeships"><span class="nav-icon">◈</span>Degree Apprenticeships</button>
         <button class="nav-item" data-view="applications"><span class="nav-icon">▣</span>Applications <span class="nav-count" id="nav-application-count">0</span></button>
         <button class="nav-item" data-view="practice"><span class="nav-icon">◌</span>Practice studio</button>
         <button class="nav-item" data-view="documents"><span class="nav-icon">▤</span>Documents</button>
       </nav>
       <select class="mobile-nav-select" id="mobile-nav-select" aria-label="Main navigation">
         <option value="overview">Overview</option>
-        <option value="opportunities">Find opportunities</option>
+        <option value="opportunities">Spring Weeks</option>
+        <option value="degree-apprenticeships">Degree Apprenticeships</option>
         <option value="applications">Applications</option>
         <option value="practice">Practice studio</option>
         <option value="documents">Documents</option>
@@ -73,6 +75,19 @@
           <table class="opportunity-table">
             <thead><tr><th>Firm</th><th>Programme</th><th>Sector</th><th>Location</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
             <tbody id="opportunity-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="degree-apprenticeships-view">
+        <div class="page-intro"><div><div class="eyebrow">DISCOVERY</div><h1>Find your degree apprenticeship.</h1><p>Curated Level 6/7 degree apprenticeships with the details that matter. Every fact has a source.</p></div></div>
+        <div class="filter-toolbar"><label class="search-field"><span>⌕</span><input id="da-opportunity-search" type="search" placeholder="Search firms, sectors or cities" /></label><select id="da-sector-filter"><option value="all">All sectors</option><option value="Engineering">Engineering</option><option value="Technology & Digital">Technology &amp; Digital</option><option value="Construction">Construction</option><option value="Finance & Accounting">Finance &amp; Accounting</option><option value="Business & Management">Business &amp; Management</option><option value="Law">Law</option><option value="Healthcare">Healthcare</option><option value="Cyber Security">Cyber Security</option><option value="Public Sector">Public Sector</option></select><select id="da-status-filter"><option value="all">Any status</option><option value="open">Open now</option><option value="upcoming">Upcoming</option><option value="closed">Closed</option><option value="finished">Finished</option><option value="unknown">Needs review</option><option value="saved">Saved by me</option></select><div class="view-toggle" id="da-opportunity-view-toggle" role="group" aria-label="Layout"><button class="view-toggle-btn" data-da-opportunity-view="cards" aria-label="Card view" title="Card view">▦</button><button class="view-toggle-btn" data-da-opportunity-view="table" aria-label="Table view" title="Table view">☰</button></div></div>
+        <div class="source-note" id="da-source-note"><span>…</span> Checking official career pages…</div>
+        <div class="opportunity-grid" id="da-opportunity-grid"></div>
+        <div class="opportunity-table-wrap" id="da-opportunity-table-wrap" hidden>
+          <table class="opportunity-table">
+            <thead><tr><th>Firm</th><th>Programme</th><th>Sector</th><th>Location</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
+            <tbody id="da-opportunity-table-body"></tbody>
           </table>
         </div>
       </section>

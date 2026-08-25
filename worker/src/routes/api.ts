@@ -39,7 +39,7 @@ apiRoutes.get("/session", async (c) => {
 const ANONYMOUS_PREVIEW_COUNT = 3;
 
 apiRoutes.get("/opportunities", async (c) => {
-  const opportunities = await storedOpportunities(c.env);
+  const opportunities = await storedOpportunities(c.env, "spring_week");
   const user = c.get("user");
   const authenticated = Boolean(user);
   const visible = authenticated ? opportunities : opportunities.slice(0, ANONYMOUS_PREVIEW_COUNT);

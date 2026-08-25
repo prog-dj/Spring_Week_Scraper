@@ -30,12 +30,12 @@ export async function upsertOpportunity(env: Env, item: Record<string, unknown>)
     .first<{ status: string }>();
 
   await env.DB.prepare(
-    `INSERT INTO opportunities (id, company, programme, sector, location, opportunity_url, source_url, discovered_via, deadline, programme_dates, status, confidence, evidence, application_process, eligibility, format, http_status, checked_at, last_error, logo, logo_class, opportunity_type, source_type, evidence_excerpt, prep_tags)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
-     ON CONFLICT(id) DO UPDATE SET company=excluded.company, programme=excluded.programme, sector=excluded.sector, location=excluded.location, deadline=excluded.deadline, programme_dates=excluded.programme_dates, status=excluded.status, confidence=excluded.confidence, evidence=excluded.evidence, application_process=excluded.application_process, eligibility=excluded.eligibility, format=excluded.format, http_status=excluded.http_status, checked_at=excluded.checked_at, last_error=excluded.last_error, logo=excluded.logo, logo_class=excluded.logo_class, opportunity_type=excluded.opportunity_type, source_type=excluded.source_type, evidence_excerpt=excluded.evidence_excerpt, prep_tags=excluded.prep_tags`
+    `INSERT INTO opportunities (id, company, programme, sector, category, location, opportunity_url, source_url, discovered_via, deadline, programme_dates, status, confidence, evidence, application_process, eligibility, format, http_status, checked_at, last_error, logo, logo_class, opportunity_type, source_type, evidence_excerpt, prep_tags)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)
+     ON CONFLICT(id) DO UPDATE SET company=excluded.company, programme=excluded.programme, sector=excluded.sector, category=excluded.category, location=excluded.location, deadline=excluded.deadline, programme_dates=excluded.programme_dates, status=excluded.status, confidence=excluded.confidence, evidence=excluded.evidence, application_process=excluded.application_process, eligibility=excluded.eligibility, format=excluded.format, http_status=excluded.http_status, checked_at=excluded.checked_at, last_error=excluded.last_error, logo=excluded.logo, logo_class=excluded.logo_class, opportunity_type=excluded.opportunity_type, source_type=excluded.source_type, evidence_excerpt=excluded.evidence_excerpt, prep_tags=excluded.prep_tags`
   )
     .bind(
-      item.id, item.company, item.programme, item.sector ?? null, item.location ?? null,
+      item.id, item.company, item.programme, item.sector ?? null, item.category ?? "spring_week", item.location ?? null,
       item.opportunity_url, item.source_url, item.discovered_via, item.deadline ?? null,
       item.programme_dates ?? null, item.status, item.confidence, item.evidence ?? null,
       item.application_process ?? null, item.eligibility ?? null, item.format ?? null,
@@ -166,12 +166,15 @@ function parseList(raw: string | null): unknown[] | null {
   }
 }
 
-export async function storedOpportunities(env: Env): Promise<Record<string, unknown>[]> {
+// category defaults to "spring_week" -- the original/default feed. Degree
+// Apprenticeships are a wholly separate category value, queried the same way
+// but never mixed into this default (see routes/degreeApprenticeships.ts).
+export async function storedOpportunities(env: Env, category: string = "spring_week"): Promise<Record<string, unknown>[]> {
   const { results } = await env.DB.prepare(
-    `SELECT * FROM opportunities WHERE deadline IS NULL OR deadline >= date('now', ?)
+    `SELECT * FROM opportunities WHERE category = ? AND (deadline IS NULL OR deadline >= date('now', ?))
      ORDER BY CASE status WHEN 'open' THEN 1 WHEN 'upcoming' THEN 2 WHEN 'unknown' THEN 3 ELSE 4 END, deadline IS NULL, deadline`
   )
-    .bind(`-${EXPIRED_GRACE_DAYS} days`)
+    .bind(category, `-${EXPIRED_GRACE_DAYS} days`)
     .all<OpportunityRow>();
 
   return results.map((item) => ({

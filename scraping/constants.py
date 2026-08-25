@@ -43,8 +43,52 @@ EXCLUDED_DOMAINS = (
     "thestudentroom.co.uk", "instagram.com", "facebook.com", "linkedin.com",
     "twitter.com", "x.com", "youtube.com", "tiktok.com", "google.com",
     "quora.com", "pinterest.com", "wikipedia.org",
+    # Job-board aggregators: their listing titles are the aggregator's own SEO
+    # phrasing ("X Degree Apprenticeship Job (with Salaries)"), not the
+    # employer's name, so extract_company() has nothing real to extract from
+    # these pages -- and the listing itself typically just re-links to the
+    # employer's own site anyway, which search already turns up separately.
+    "indeed.com", "indeed.co.uk", "reed.co.uk", "totaljobs.com",
+    "cv-library.co.uk", "monster.co.uk", "glassdoor.co.uk", "glassdoor.com",
+    "simplyhired.co.uk", "adzuna.co.uk", "jobsite.co.uk", "careerjet.co.uk",
+    "milkround.com", "prospects.ac.uk", "ratemyapprenticeship.co.uk",
+    "apprenticeships.gov.uk", "the-trackr.com", "ucas.com",
 )
 EXCLUDED_TERMS = ("tracker", "calendar", "guide", "what is", "how do you get", "complete guide", "free resources")
+
+# --- Degree Apprenticeships: a separate discovery track from spring weeks, see
+# scraping/discovery.py's discover_da_candidates(). Tagged with a distinct
+# `category` at the D1 layer so the two never mix in listings, dedup, or the
+# stale-cleanup pass -- see worker/src/db/opportunities.ts.
+DA_SEARCH_QUERIES = [
+    "UK degree apprenticeship applications 2027",
+    "UK engineering degree apprenticeship applications",
+    "UK technology degree apprenticeship applications",
+    "UK digital and technology solutions degree apprenticeship",
+    "UK construction degree apprenticeship applications",
+    "UK finance degree apprenticeship applications",
+    "UK accountancy degree apprenticeship applications",
+    "UK business management degree apprenticeship applications",
+    "UK law degree apprenticeship solicitor applications",
+    "UK nursing degree apprenticeship applications",
+    "UK cyber security degree apprenticeship applications",
+    "UK data degree apprenticeship applications",
+    "UK police constable degree apprenticeship applications",
+    "UK civil service degree apprenticeship applications",
+]
+
+# Broad enough to catch genuine Level 6/7 degree apprenticeships, but "degree"
+# (or "level 6"/"level 7", the UK regulatory levels a degree apprenticeship
+# sits at) must appear alongside "apprenticeship" -- otherwise this would also
+# match ordinary Level 2/3 (non-degree) apprenticeship listings, a materially
+# different and much more common thing that isn't what this tab is for.
+DA_OPPORTUNITY_TERMS = (
+    "degree apprenticeship", "degree apprenticeships",
+    "level 6 apprenticeship", "level 7 apprenticeship",
+    "level 6 apprentice", "level 7 apprentice",
+    "higher and degree apprenticeship",
+)
+DA_EXCLUDED_TERMS = EXCLUDED_TERMS + ("level 2 apprenticeship", "level 3 apprenticeship", "gcse apprenticeship")
 
 DEADLINE_TRIGGERS = (
     "deadline", "closing date", "applications close", "apply by", "closes",

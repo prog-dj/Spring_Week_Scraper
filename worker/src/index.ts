@@ -14,6 +14,7 @@ import { accountRoutes } from "./routes/account";
 import { billingRoutes } from "./routes/billing";
 import { stripeWebhookRoutes } from "./routes/stripeWebhook";
 import { interviewRoutes } from "./routes/interview";
+import { degreeApprenticeshipRoutes } from "./routes/degreeApprenticeships";
 
 const app = new Hono<HonoEnv>({ strict: false });
 
@@ -41,6 +42,7 @@ app.use("*", loadCurrentUser);
 
 app.route("/auth", authRoutes);
 app.route("/api", apiRoutes);
+app.route("/api/degree-apprenticeships", degreeApprenticeshipRoutes);
 app.route("/api/workspace", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", workspaceRoutes));
 app.route("/api/applications", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", applicationsRoutes));
 app.route("/api/saved", new Hono<HonoEnv>({ strict: false }).use("*", requireAuth).route("/", savedRoutes));

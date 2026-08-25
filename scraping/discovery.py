@@ -14,6 +14,9 @@ import requests
 from bs4 import BeautifulSoup
 
 from scraping.constants import (
+    DA_EXCLUDED_TERMS,
+    DA_OPPORTUNITY_TERMS,
+    DA_SEARCH_QUERIES,
     DEADLINE_TRIGGERS,
     EXCLUDED_DOMAINS,
     EXCLUDED_TERMS,
@@ -40,6 +43,7 @@ from scraping.extraction import (
     extract_identity_eligibility,
     extract_programme,
     extract_programme_dates,
+    infer_da_sector,
     infer_location,
     infer_sector,
     normalize_company,
@@ -63,39 +67,75 @@ def _host_matches(host: str, domains: tuple[str, ...]) -> bool:
     return any(host == domain or host.endswith(f".{domain}") for domain in domains)
 
 
-def is_opportunity_candidate(result: dict) -> bool:
+def is_opportunity_candidate(result: dict, opportunity_terms=OPPORTUNITY_TERMS, excluded_terms=EXCLUDED_TERMS) -> bool:
     link = result.get("link", "")
     haystack = f"{result.get('title', '')} {result.get('snippet', '')}".lower()
     host = urlparse(link).netloc.lower()
-    if _host_matches(host, EXCLUDED_DOMAINS) or any(term in f"{haystack} {link.lower()}" for term in EXCLUDED_TERMS):
+    if _host_matches(host, EXCLUDED_DOMAINS) or any(term in f"{haystack} {link.lower()}" for term in excluded_terms):
         return False
-    return any(term in haystack for term in OPPORTUNITY_TERMS)
+    return any(term in haystack for term in opportunity_terms)
+
+
+# Degree apprenticeship listings often come from the university/training
+# provider that runs the accredited degree (Exeter, Cranfield, Northumbria...)
+# rather than the employer -- worth flagging explicitly, since "who's this
+# application actually with" isn't obvious from the firm name alone the way
+# it is for an employer's own careers page.
+TRAINING_PROVIDER_DOMAINS = (
+    "qa.com", "multiverse.io", "bpp.com", "kaplan.co.uk",
+    "babingtonbusinesscollege.co.uk",
+)
 
 
 def source_type(url: str) -> str:
     host = urlparse(url).netloc.lower()
     if _host_matches(host, EXCLUDED_DOMAINS):
         return "aggregator"
+    if host.endswith(".ac.uk") or _host_matches(host, TRAINING_PROVIDER_DOMAINS):
+        return "university"
     if "career" in host or any(term in url.lower() for term in ("/careers", "/jobs", "/early-careers", "/students", "/graduates")):
         return "employer"
     return "unknown"
 
 
-def search_serper() -> list[dict]:
+def search_serper(
+    queries=SEARCH_QUERIES,
+    opportunity_terms=OPPORTUNITY_TERMS,
+    excluded_terms=EXCLUDED_TERMS,
+    discovered_via: str = "Serper.dev",
+    category: str = "spring_week",
+) -> list[dict]:
+    """Generalized so Degree Apprenticeship discovery (see discover_da_candidates)
+    reuses this exact search+filter mechanism with its own query list and
+    terminology, rather than a separate copy of the Serper-calling code."""
     api_key = serper_api_key()
     if not api_key:
         raise RuntimeError("SERPER_API_KEY is not configured")
     candidates: dict[str, dict] = {}
-    for query in SEARCH_QUERIES:
+    for query in queries:
         response = requests.post(SERPER_URL, headers={"X-API-KEY": api_key, "Content-Type": "application/json"}, json={"q": query, "gl": "uk", "hl": "en", "num": 20}, timeout=REQUEST_TIMEOUT)
         if not response.ok:
             detail = response.text[:500].replace("\n", " ")
             raise RuntimeError(f"Serper HTTP {response.status_code}: {detail}")
         for result in response.json().get("organic", []):
             url = canonical_url(result.get("link", ""))
-            if url and is_opportunity_candidate(result):
-                candidates.setdefault(url, {"url": url, "title": result.get("title", ""), "snippet": result.get("snippet", ""), "discovered_via": "Serper.dev"})
+            if url and is_opportunity_candidate(result, opportunity_terms, excluded_terms):
+                candidates.setdefault(url, {"url": url, "title": result.get("title", ""), "snippet": result.get("snippet", ""), "discovered_via": discovered_via, "category": category})
     return list(candidates.values())
+
+
+def search_serper_da() -> list[dict]:
+    """Degree Apprenticeship discovery via the same search+verify mechanism as
+    spring weeks, just with DA-specific queries/terminology and a "category"
+    tag carried through to _build_opportunity so DA and spring-week results
+    never mix in listings, dedup, or D1 upserts."""
+    return search_serper(
+        queries=DA_SEARCH_QUERIES,
+        opportunity_terms=DA_OPPORTUNITY_TERMS,
+        excluded_terms=DA_EXCLUDED_TERMS,
+        discovered_via="Serper.dev (Degree Apprenticeship)",
+        category="degree_apprenticeship",
+    )
 
 
 def load_seed_employers() -> list[dict]:
@@ -203,27 +243,31 @@ def search_seed_employers() -> tuple[list[dict], list[dict]]:
 
 
 def _company_for(candidate: dict) -> str:
-    return candidate.get("known_company") or extract_company(candidate.get("title", ""), candidate["url"])
+    return candidate.get("known_company") or extract_company(
+        candidate.get("title", ""), candidate["url"], candidate.get("category", "spring_week")
+    )
 
 
 def _build_opportunity(candidate: dict, http_status: int | None, text: str, rendered: bool, section_label: str | None = None) -> dict:
     checked_at = utc_now()
+    category = candidate.get("category", "spring_week")
+    sector_classifier = infer_da_sector if category == "degree_apprenticeship" else infer_sector
     url = candidate["url"] if not section_label else f"{candidate['url']}#{re.sub(r'[^a-z0-9]+', '-', section_label.lower()).strip('-')}"
     title_hint = section_label or candidate.get("title", "")
     initial_type = opportunity_type(title_hint, candidate.get("snippet", ""))
-    initial_sector = infer_sector(title_hint)
+    initial_sector = sector_classifier(title_hint)
     # Diversity-scheme naming ("Women in Banking", "Black Heritage Programme")
     # is often stated only in the title, never repeated in the page body -- so
     # this is checked even when verification below fails entirely.
     title_identity_eligibility = extract_identity_eligibility(title_hint)
-    base = {"id": _section_id(candidate["url"], section_label), "company": _company_for(candidate), "programme": section_label or extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": initial_sector, "location": None, "opportunity_url": url, "source_url": candidate["url"], "discovered_via": candidate["discovered_via"], "deadline": None, "programme_dates": None, "status": "unknown", "confidence": "low", "evidence": "Source could not be verified", "evidence_excerpt": None, "application_process": None, "eligibility": json.dumps(title_identity_eligibility) if title_identity_eligibility else None, "format": None, "http_status": http_status, "checked_at": checked_at, "last_error": None, "logo": "?", "logo_class": "", "opportunity_type": initial_type, "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(title_hint))}
+    base = {"id": _section_id(candidate["url"], section_label), "company": _company_for(candidate), "programme": section_label or extract_programme(candidate.get("title", ""), candidate.get("snippet", "")), "sector": initial_sector, "category": category, "location": None, "opportunity_url": url, "source_url": candidate["url"], "discovered_via": candidate["discovered_via"], "deadline": None, "programme_dates": None, "status": "unknown", "confidence": "low", "evidence": "Source could not be verified", "evidence_excerpt": None, "application_process": None, "eligibility": json.dumps(title_identity_eligibility) if title_identity_eligibility else None, "format": None, "http_status": http_status, "checked_at": checked_at, "last_error": None, "logo": "?", "logo_class": "", "opportunity_type": initial_type, "source_type": source_type(candidate["url"]), "prep_tags": json.dumps(prep_tags(title_hint))}
     try:
         if len(text) < 100:
             raise RuntimeError(f"verification returned too little page text (HTTP {http_status})")
         deadline = extract_deadline(text)
         programme_dates = extract_programme_dates(text)
         status, evidence, confidence = classify_status(text, deadline, programme_dates)
-        sector = infer_sector(f"{title_hint} {text}")
+        sector = sector_classifier(f"{title_hint} {text}")
         opp_type = opportunity_type(title_hint, text)
         process = extract_application_process(text)
         # Title-only, not the full page body: a page's nav/footer routinely
@@ -418,9 +462,12 @@ def dedupe_opportunities(items: list[dict]) -> list[dict]:
             len(item.get("evidence_excerpt") or ""),
         )
 
-    by_company: dict[str, list[dict]] = {}
+    # Category is part of the grouping key -- a company's spring week and its
+    # degree apprenticeship are never the same programme, and must never
+    # cluster together no matter how similar their names/types look.
+    by_company: dict[tuple[str, str], list[dict]] = {}
     for item in items:
-        by_company.setdefault(normalize_company(item["company"]), []).append(item)
+        by_company.setdefault((normalize_company(item["company"]), item.get("category", "spring_week")), []).append(item)
 
     deduped: list[dict] = []
     for group in by_company.values():

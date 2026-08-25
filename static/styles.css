@@ -343,6 +343,7 @@ h1, h2, h3, p { margin: 0; }
 .save-button.saved { color: var(--accent); }
 .opportunity-card h2 { font: 600 16px var(--font); letter-spacing: -0.1px; margin: 16px 0 4px; }
 .opportunity-card .role { color: var(--muted); font-size: 11px; }
+.university-badge { background: var(--surface-muted, #f3f2ee); border: 1px solid var(--border); border-radius: 999px; color: var(--muted); display: inline-block; font-size: 10px; font-weight: 600; margin-top: 8px; padding: 3px 9px; }
 
 .opportunity-facts { border-top: 1px solid var(--border); display: grid; gap: 12px; grid-template-columns: 1fr 1fr; margin: 16px 0; padding-top: 14px; }
 .fact label { color: var(--muted); display: block; font-size: 9px; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 3px; text-transform: uppercase; }

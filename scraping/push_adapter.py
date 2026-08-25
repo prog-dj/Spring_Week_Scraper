@@ -7,6 +7,12 @@ now, living in the Worker), then POSTs the results to the Worker's
 The scraping logic itself (search_serper, search_seed_employers,
 verify_candidates, dedupe_opportunities) is untouched, imported straight from
 scraping.discovery -- only the persistence step differs from the original.
+
+Both spring-week and Degree Apprenticeship discovery run together in every
+invocation (never one without the other) -- the Worker's stale-cleanup pass
+treats "not in this run's verified list" as "delete it" for tracked
+opportunities, so a partial run covering only one category would wrongly
+purge the other.
 """
 from __future__ import annotations
 
@@ -15,12 +21,13 @@ import sys
 
 import requests
 
-from scraping.constants import SEARCH_QUERIES, serper_api_key
+from scraping.constants import DA_SEARCH_QUERIES, SEARCH_QUERIES, serper_api_key
 from scraping.discovery import (
     dedupe_opportunities,
     load_seed_employers,
     search_seed_employers,
     search_serper,
+    search_serper_da,
     utc_now,
     verify_candidates,
 )
@@ -35,6 +42,12 @@ def run() -> dict:
         candidates_by_url: dict[str, dict] = {}
         if serper_api_key():
             candidates_by_url = {c["url"]: c for c in search_serper()}
+            # Degree Apprenticeships are search-only for now (no curated seed
+            # employer list yet, see scraping/constants.py DA_SEARCH_QUERIES) --
+            # keyed separately so a DA and spring-week candidate at the exact
+            # same URL (unlikely, but possible) don't clobber each other.
+            for da_candidate in search_serper_da():
+                candidates_by_url.setdefault(f"da:{da_candidate['url']}", da_candidate)
         seed_count = len(load_seed_employers())
         seed_candidates, seed_failures = search_seed_employers()
         for candidate in seed_candidates:
@@ -44,7 +57,7 @@ def run() -> dict:
 
         payload = {
             "startedAt": started,
-            "queryCount": len(SEARCH_QUERIES) + seed_count,
+            "queryCount": len(SEARCH_QUERIES) + len(DA_SEARCH_QUERIES) + seed_count,
             "candidateCount": len(candidates),
             "verified": verified,
             "seedFailures": seed_failures,
