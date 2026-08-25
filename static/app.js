@@ -1082,8 +1082,23 @@ async function openInterviewManageSubscription() {
   }
 }
 
-function openInterviewSectorPicker() {
-  openModal(`<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Which field are you practising for?</h2><p>Questions are tailored to the sector you pick.</p><div class="modal-form"><select id="interview-sector-select">${INTERVIEW_SECTORS.map((s) => `<option value="${s}">${s}</option>`).join('')}</select><button class="primary-button full-width" id="interview-sector-start">Start <span>→</span></button><button class="text-button full-width" id="interview-history-link" style="margin-top:8px">View past feedback</button></div>`);
+async function openInterviewSectorPicker() {
+  openModal('<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Which field are you practising for?</h2><p class="empty-state">Checking today\'s quota…</p>');
+
+  let remaining = null;
+  try {
+    const response = await fetch('/api/interview/limit-status');
+    if (response.ok) remaining = (await response.json()).remaining;
+  } catch (error) { /* fails open -- worst case the backend still enforces the cap on submit */ }
+
+  if (remaining === 0) {
+    openModal('<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Daily limit reached</h2><p>You\'ve used all 15 practice questions for today. Come back tomorrow for more.</p><button class="secondary-button full-width" id="interview-limit-close">Close</button>');
+    $('#interview-limit-close').addEventListener('click', closeModal);
+    return;
+  }
+
+  const quotaNote = remaining === null ? '' : `<p class="interview-metric-line">${remaining} of 15 practice questions left today</p>`;
+  openModal(`<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Which field are you practising for?</h2><p>Questions are tailored to the sector you pick.</p><div class="modal-form"><select id="interview-sector-select">${INTERVIEW_SECTORS.map((s) => `<option value="${s}">${s}</option>`).join('')}</select><button class="primary-button full-width" id="interview-sector-start">Start <span>→</span></button>${quotaNote}<button class="text-button full-width" id="interview-history-link" style="margin-top:8px">View past feedback</button></div>`);
   $('#interview-sector-start').addEventListener('click', () => beginInterviewSession($('#interview-sector-select').value));
   $('#interview-history-link').addEventListener('click', openInterviewHistory);
 }

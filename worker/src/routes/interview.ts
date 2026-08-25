@@ -4,7 +4,7 @@ import { questionsForSector } from "../interview/questions";
 import { computeDeliveryMetrics } from "../interview/metrics";
 import { getLlmFeedback } from "../interview/feedback";
 import { createAttempt, listAttempts } from "../db/interviewAttempts";
-import { checkRateLimit } from "../storage/rateLimit";
+import { checkRateLimit, peekRateLimit } from "../storage/rateLimit";
 
 export const interviewRoutes = new Hono<HonoEnv>({ strict: false });
 
@@ -19,6 +19,18 @@ interviewRoutes.get("/questions", (c) => {
 interviewRoutes.get("/attempts", async (c) => {
   const user = c.get("user")!;
   return c.json({ attempts: await listAttempts(c.env, user.id) });
+});
+
+// Lets the frontend check/display remaining quota *before* committing to a
+// full prep-countdown-and-record flow, rather than only discovering the cap
+// is hit after wasting the user's time recording an answer.
+interviewRoutes.get("/limit-status", async (c) => {
+  const user = c.get("user")!;
+  const status = await peekRateLimit(c.env, `interview:${user.id}`, {
+    limit: DAILY_ATTEMPT_LIMIT,
+    windowSeconds: 60 * 60 * 24,
+  });
+  return c.json(status);
 });
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {

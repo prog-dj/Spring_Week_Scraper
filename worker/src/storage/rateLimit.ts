@@ -39,3 +39,23 @@ export async function checkRateLimit(
   await env.DB.prepare("UPDATE rate_limits SET count = count + 1 WHERE bucket_key = ?").bind(bucket).run();
   return { allowed: true };
 }
+
+// Read-only version of checkRateLimit -- reports current usage without
+// incrementing the counter, so a caller can show/act on remaining quota
+// before committing to the action that would consume it.
+export async function peekRateLimit(
+  env: Env,
+  bucket: string,
+  { limit, windowSeconds }: { limit: number; windowSeconds: number }
+): Promise<{ count: number; limit: number; remaining: number }> {
+  const row = await env.DB.prepare("SELECT count, window_started_at FROM rate_limits WHERE bucket_key = ?")
+    .bind(bucket)
+    .first<{ count: number; window_started_at: string }>();
+
+  if (!row) return { count: 0, limit, remaining: limit };
+
+  const elapsedSeconds = (Date.now() - new Date(row.window_started_at).getTime()) / 1000;
+  if (elapsedSeconds > windowSeconds) return { count: 0, limit, remaining: limit };
+
+  return { count: row.count, limit, remaining: Math.max(0, limit - row.count) };
+}
