@@ -40,6 +40,26 @@ const SECTOR_QUESTIONS: Record<string, string[]> = {
     "Why this company's tech stack or mission specifically?",
     "Tell me about a bug you struggled to track down and how you eventually solved it.",
   ],
+  // Not tied to any single industry sector -- standard STAR-style behavioural
+  // questions about how a candidate operates in a team/work context, the kind
+  // asked regardless of which desk or practice group they're applying to.
+  Behavioural: [
+    "Tell me about a time you disagreed with a teammate or manager. How did you handle it?",
+    "Describe a situation where you had to meet a deadline with limited resources.",
+    "Tell me about a time you took the lead on something without being asked to.",
+    "Describe a time you received critical feedback. How did you respond?",
+    "Tell me about a time you had to persuade someone who wasn't convinced by your idea.",
+  ],
+  // "Describe a time when..." style questions that draw on personal
+  // experience and self-reflection rather than a specific work/team
+  // scenario -- resilience, values, and motivation questions.
+  Personal: [
+    "Describe a time when you failed at something. What did you learn from it?",
+    "Describe a time when you had to step outside your comfort zone.",
+    "Tell me about a personal achievement you're proud of that isn't on your CV.",
+    "Describe a time when you had to balance competing priorities in your own life.",
+    "What's a value that's important to you, and describe a time you acted on it under pressure.",
+  ],
 };
 
 const GENERIC_QUESTIONS = [
