@@ -1258,6 +1258,11 @@ async function submitInterviewAttempt(question, mimeType) {
   try {
     const response = await fetch('/api/interview/attempts', { method: 'POST', body: form });
     const payload = await response.json();
+    if (response.status === 429) {
+      openModal(`<span class="eyebrow">INTERVIEW PRACTICE</span><h2>Daily limit reached</h2><p>${payload.error}</p><button class="secondary-button full-width" id="interview-error-close">Close</button>`);
+      $('#interview-error-close').addEventListener('click', endInterviewSession);
+      return;
+    }
     if (!response.ok) throw new Error(payload.error || 'could not process this recording');
     showInterviewFeedback(payload.attempt);
   } catch (error) {
