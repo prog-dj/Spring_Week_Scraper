@@ -90,8 +90,9 @@ interviewRoutes.post("/attempts", async (c) => {
       return c.json({ error: "could not transcribe the recording -- try again" }, 422);
     }
 
-    const { wordsPerMinute, fillerWordCount } = computeDeliveryMetrics(transcript, durationSeconds);
-    const llmFeedback = await getLlmFeedback(c.env.ANTHROPIC_API_KEY, question, transcript);
+    const { wordsPerMinute, fillerWordCount, confidenceScore } = computeDeliveryMetrics(transcript, durationSeconds);
+    const llmResult = await getLlmFeedback(c.env.ANTHROPIC_API_KEY, question, transcript);
+    const overallScore = Math.round(((confidenceScore + llmResult.contentRelevancyScore + llmResult.breadthScore) / 3) * 10) / 10;
 
     const attempt = await createAttempt(c.env, user.id, {
       question,
@@ -99,7 +100,15 @@ interviewRoutes.post("/attempts", async (c) => {
       durationSeconds: Math.round(durationSeconds),
       wordsPerMinute,
       fillerWordCount,
-      llmFeedback,
+      confidenceScore,
+      contentRelevancyScore: llmResult.contentRelevancyScore,
+      breadthScore: llmResult.breadthScore,
+      overallScore,
+      llmFeedback: JSON.stringify({
+        strengths: llmResult.strengths,
+        areasToStrengthen: llmResult.areasToStrengthen,
+        bottomLine: llmResult.bottomLine,
+      }),
     });
 
     // The audio itself (audioBuffer/File) is never written anywhere -- it

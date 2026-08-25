@@ -1100,7 +1100,7 @@ async function openInterviewHistory() {
       $('#interview-history-close').addEventListener('click', () => openInterviewSectorPicker());
       return;
     }
-    const rows = attempts.map((attempt) => `<div class="document-row"><div class="document-name"><strong>${attempt.question}</strong><span>${new Date(attempt.created_at).toLocaleDateString([], { dateStyle: 'medium' })} · ${attempt.words_per_minute} wpm · ${attempt.filler_word_count} filler words</span></div><button class="small-button" data-interview-attempt="${attempt.id}">View</button></div>`).join('');
+    const rows = attempts.map((attempt) => `<div class="document-row"><div class="document-name"><strong>${attempt.question}</strong><span>${new Date(attempt.created_at).toLocaleDateString([], { dateStyle: 'medium' })} · ${attempt.overall_score ?? '—'}/10 overall</span></div><button class="small-button" data-interview-attempt="${attempt.id}">View</button></div>`).join('');
     openModal(`<span class="eyebrow">INTERVIEW PRACTICE · HISTORY</span><h2>Your past attempts</h2><div>${rows}</div><button class="secondary-button full-width" id="interview-history-back" style="margin-top:12px">Back</button>`);
     $('#interview-history-back').addEventListener('click', () => openInterviewSectorPicker());
     $$('[data-interview-attempt]').forEach((button) => button.addEventListener('click', () => {
@@ -1114,8 +1114,36 @@ async function openInterviewHistory() {
 }
 
 function showInterviewHistoryDetail(attempt) {
-  openModal(`<span class="eyebrow">INTERVIEW PRACTICE · ${new Date(attempt.created_at).toLocaleDateString([], { dateStyle: 'medium' })}</span><h2>${attempt.question}</h2><div class="interview-feedback-card"><div class="interview-feedback-stats"><span>Pace<strong>${attempt.words_per_minute} wpm</strong></span><span>Filler words<strong>${attempt.filler_word_count}</strong></span><span>Length<strong>${attempt.duration_seconds}s</strong></span></div><label>What you said</label><p class="workspace-list">${attempt.transcript}</p><label>Feedback</label><p class="workspace-list">${attempt.llm_feedback.replace(/\n/g, '<br>')}</p></div><button class="secondary-button full-width" id="interview-history-detail-back">Back</button>`);
+  openModal(`<span class="eyebrow">INTERVIEW PRACTICE · ${new Date(attempt.created_at).toLocaleDateString([], { dateStyle: 'medium' })}</span><h2>${attempt.question}</h2>${renderInterviewFeedbackCard(attempt)}<button class="secondary-button full-width" id="interview-history-detail-back">Back</button>`);
   $('#interview-history-detail-back').addEventListener('click', openInterviewHistory);
+}
+
+// Shared by the live post-recording feedback screen and the history detail
+// view. llm_feedback is stored as JSON ({strengths, areasToStrengthen,
+// bottomLine}); parsed defensively since it's just a TEXT column.
+function renderInterviewFeedbackCard(attempt) {
+  let parsed = { strengths: [], areasToStrengthen: [], bottomLine: '' };
+  try { parsed = JSON.parse(attempt.llm_feedback); } catch (error) { parsed.bottomLine = attempt.llm_feedback || ''; }
+
+  const badges = [
+    ['Overall', attempt.overall_score, '/10', 'overall'],
+    ['Confidence', attempt.confidence_score, '/10', ''],
+    ['Relevancy', attempt.content_relevancy_score, '/10', ''],
+    ['Breadth', attempt.breadth_score, '/10', ''],
+  ].map(([label, value, suffix, cls]) => `<div class="interview-score-badge ${cls}"><strong>${value ?? '—'}</strong><span>${label}${suffix}</span></div>`).join('');
+
+  const strengthsList = (parsed.strengths || []).map((s) => `<li>${s}</li>`).join('');
+  const weaknessesList = (parsed.areasToStrengthen || []).map((s) => `<li>${s}</li>`).join('');
+
+  return `<div class="interview-feedback-card">
+    <div class="interview-score-badges">${badges}</div>
+    <p class="interview-metric-line">${attempt.words_per_minute} wpm · ${attempt.filler_word_count} filler word${attempt.filler_word_count === 1 ? '' : 's'} · ${attempt.duration_seconds}s</p>
+    ${strengthsList ? `<h4>Strengths</h4><ul class="interview-feedback-list">${strengthsList}</ul>` : ''}
+    ${weaknessesList ? `<h4>Areas to strengthen</h4><ul class="interview-feedback-list">${weaknessesList}</ul>` : ''}
+    ${parsed.bottomLine ? `<p class="interview-bottom-line"><strong>Bottom line:</strong> ${parsed.bottomLine}</p>` : ''}
+    <label>What you said</label>
+    <p class="workspace-list">${attempt.transcript}</p>
+  </div>`;
 }
 
 async function beginInterviewSession(sector) {
@@ -1240,7 +1268,7 @@ async function submitInterviewAttempt(question, mimeType) {
 
 function showInterviewFeedback(attempt) {
   const hasMore = interviewState.questionIndex + 1 < interviewState.questions.length;
-  openModal(`<span class="eyebrow">INTERVIEW PRACTICE · FEEDBACK</span><h2>${attempt.question}</h2><div class="interview-feedback-card"><div class="interview-feedback-stats"><span>Pace<strong>${attempt.words_per_minute} wpm</strong></span><span>Filler words<strong>${attempt.filler_word_count}</strong></span><span>Length<strong>${attempt.duration_seconds}s</strong></span></div><label>What you said</label><p class="workspace-list">${attempt.transcript}</p><label>Feedback</label><p class="workspace-list">${attempt.llm_feedback.replace(/\n/g, '<br>')}</p></div><button class="primary-button full-width" id="interview-next-question">${hasMore ? 'Next question' : 'Finish'} <span>→</span></button><button class="secondary-button full-width" id="interview-finish-session" style="margin-top:8px">End session</button>`);
+  openModal(`<span class="eyebrow">INTERVIEW PRACTICE · FEEDBACK</span><h2>${attempt.question}</h2>${renderInterviewFeedbackCard(attempt)}<button class="primary-button full-width" id="interview-next-question">${hasMore ? 'Next question' : 'Finish'} <span>→</span></button><button class="secondary-button full-width" id="interview-finish-session" style="margin-top:8px">End session</button>`);
   $('#interview-finish-session').addEventListener('click', endInterviewSession);
   $('#interview-next-question').addEventListener('click', () => {
     if (hasMore) { interviewState.questionIndex += 1; showInterviewQuestion(); } else { endInterviewSession(); }

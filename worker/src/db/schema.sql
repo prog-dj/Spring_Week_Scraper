@@ -110,6 +110,10 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 
 -- Deliberately no audio/video storage_ref column -- recordings are processed
 -- in-memory and discarded; only the transcript and derived feedback persist.
+-- confidence_score is computed deterministically from pace + filler words;
+-- content_relevancy_score/breadth_score come from the LLM judging the
+-- answer's content; overall_score is their average. llm_feedback is a JSON
+-- blob: { strengths: string[], areasToStrengthen: string[], bottomLine: string }.
 CREATE TABLE IF NOT EXISTS interview_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -118,6 +122,10 @@ CREATE TABLE IF NOT EXISTS interview_attempts (
     duration_seconds INTEGER,
     words_per_minute INTEGER,
     filler_word_count INTEGER,
+    confidence_score REAL,
+    content_relevancy_score INTEGER,
+    breadth_score INTEGER,
+    overall_score REAL,
     llm_feedback TEXT,
     created_at TEXT NOT NULL
 );
