@@ -54,7 +54,7 @@ billingRoutes.post("/checkout", async (c) => {
       // client_reference_id ties the Checkout Session back to our own user id
       // -- the webhook uses this to know who just subscribed.
       client_reference_id: String(user.id),
-      ui_mode: "embedded",
+      ui_mode: "embedded_page",
       return_url: new URL("/?checkout=success&session_id={CHECKOUT_SESSION_ID}", c.req.url).toString(),
     });
     return c.json({ clientSecret: session.client_secret, publishableKey: c.env.STRIPE_PUBLISHABLE_KEY });

@@ -3,7 +3,7 @@ import type { HonoEnv } from "../types";
 import { questionsForSector } from "../interview/questions";
 import { computeDeliveryMetrics } from "../interview/metrics";
 import { getLlmFeedback } from "../interview/feedback";
-import { createAttempt } from "../db/interviewAttempts";
+import { createAttempt, listAttempts } from "../db/interviewAttempts";
 import { checkRateLimit } from "../storage/rateLimit";
 
 export const interviewRoutes = new Hono<HonoEnv>({ strict: false });
@@ -14,6 +14,11 @@ const DAILY_ATTEMPT_LIMIT = 15; // cheap insurance against scripted abuse -- nor
 interviewRoutes.get("/questions", (c) => {
   const sector = c.req.query("sector") || null;
   return c.json({ questions: questionsForSector(sector) });
+});
+
+interviewRoutes.get("/attempts", async (c) => {
+  const user = c.get("user")!;
+  return c.json({ attempts: await listAttempts(c.env, user.id) });
 });
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
