@@ -431,6 +431,7 @@ function closeModal() {
   // the X button or backdrop click mid-interview, rather than the flow's own
   // "End session" buttons (which already clean this up before calling closeModal).
   if (typeof interviewState !== 'undefined' && interviewState) { stopInterviewMedia(); interviewState = null; }
+  if (typeof stripeEmbeddedCheckout !== 'undefined' && stripeEmbeddedCheckout) { stripeEmbeddedCheckout.destroy(); stripeEmbeddedCheckout = null; }
   $('#modal-backdrop').hidden = true;
 }
 function openOpportunity(id) {
@@ -1026,22 +1027,48 @@ const INTERVIEW_PREP_SECONDS = 30;
 const INTERVIEW_MAX_RECORD_SECONDS = 120;
 
 let interviewState = null; // set only while the modal-driven interview flow is active
+let stripeEmbeddedCheckout = null; // set only while the embedded Stripe Checkout form is mounted
 
 function openInterviewPaywall() {
-  openModal('<span class="eyebrow">INTERVIEW PRACTICE · PAID</span><h2>Subscribe to unlock simulated interviews</h2><p>Record timed answers to real, sector-specific interview questions and get feedback on both delivery (pacing, filler words) and content, powered by AI. Cancel anytime.</p><button class="primary-button full-width" id="interview-subscribe-button">Subscribe <span>→</span></button><button class="secondary-button full-width" id="interview-paywall-cancel" style="margin-top:8px">Not now</button>');
-  $('#interview-paywall-cancel').addEventListener('click', closeModal);
-  $('#interview-subscribe-button').addEventListener('click', async (event) => {
-    event.target.textContent = 'Redirecting…';
-    try {
-      const response = await fetch('/api/billing/checkout', { method: 'POST' });
-      const payload = await response.json();
-      if (!response.ok || !payload.url) throw new Error(payload.error || 'checkout failed');
-      window.location.href = payload.url;
-    } catch (error) {
-      showToast(error.message || 'Could not start checkout');
-      event.target.textContent = 'Subscribe';
-    }
-  });
+  openModal('<span class="eyebrow">INTERVIEW PRACTICE · PAID</span><h2>Subscribe to unlock simulated interviews</h2><p>Record timed answers to real, sector-specific interview questions and get feedback on both delivery (pacing, filler words) and content, powered by AI. Cancel anytime.</p><div id="interview-checkout-mount" class="interview-checkout-mount"></div>');
+  loadInterviewCheckout();
+}
+
+// Loaded on demand (not a blocking <head> script) since almost no page load
+// ever touches the paywall -- must come directly from js.stripe.com per
+// Stripe's own requirement, never self-hosted/bundled.
+let stripeJsPromise = null;
+function loadStripeJs() {
+  if (window.Stripe) return Promise.resolve();
+  if (!stripeJsPromise) {
+    stripeJsPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://js.stripe.com/v3/';
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('could not load Stripe'));
+      document.head.appendChild(script);
+    });
+  }
+  return stripeJsPromise;
+}
+
+async function loadInterviewCheckout() {
+  const mount = $('#interview-checkout-mount');
+  mount.innerHTML = '<p class="empty-state">Loading checkout…</p>';
+  try {
+    await loadStripeJs();
+    const response = await fetch('/api/billing/checkout', { method: 'POST' });
+    const payload = await response.json();
+    if (!response.ok || !payload.clientSecret || !payload.publishableKey) throw new Error(payload.error || 'checkout failed');
+    mount.innerHTML = '';
+    // Embedded Checkout mounts Stripe's own form directly into our page (an
+    // iframe) -- the visitor never leaves springr.co.uk to pay.
+    const stripe = Stripe(payload.publishableKey);
+    stripeEmbeddedCheckout = await stripe.initEmbeddedCheckout({ clientSecret: payload.clientSecret });
+    stripeEmbeddedCheckout.mount('#interview-checkout-mount');
+  } catch (error) {
+    mount.innerHTML = `<p class="empty-state">${error.message || 'Could not start checkout'}</p>`;
+  }
 }
 
 async function openInterviewManageSubscription() {
@@ -1163,12 +1190,35 @@ function showInterviewFeedback(attempt) {
   });
 }
 
+// Stripe's Embedded Checkout navigates the whole page to return_url on
+// completion (?checkout=success&session_id=...). The webhook is the source of
+// truth for actually activating the subscription and can lag a couple of
+// seconds behind the redirect, so this polls /api/session briefly rather than
+// assuming it's already active the instant the page reloads.
+async function handleCheckoutReturn() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('checkout') !== 'success') return;
+  history.replaceState(null, '', window.location.pathname + window.location.hash);
+  showToast('Payment received -- activating your subscription…');
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const user = await loadSession();
+    if (user?.hasInterviewPracticeSubscription) {
+      applyProfileToDom();
+      showToast('Subscribed! Open Interview Practice to get started.');
+      return;
+    }
+  }
+  showToast('Payment received -- if Interview Practice still shows as locked, refresh in a moment.');
+}
+
 async function boot() {
   // Finding and browsing opportunities never requires an account -- only sign in
   // to load/show account-specific state (applications, saved, documents).
   const user = await loadSession();
   applyProfileToDom();
   if (user) await loadUserState();
+  if (user) await handleCheckoutReturn();
   if (user?.isAdmin) loadAdminStats();
   renderOverview(); renderOpportunities(); renderApplications(); renderDocuments(); renderPracticeModules(); bindEvents();
   initCookieBanner();

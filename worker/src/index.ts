@@ -27,7 +27,10 @@ app.use("*", async (c, next) => {
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   c.header(
     "Content-Security-Policy",
-    "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    // script-src/frame-src/connect-src additions are Stripe's own documented
+    // requirements for Stripe.js + Embedded Checkout (docs.stripe.com/security/guide) --
+    // needed for the Interview Practice subscribe flow.
+    "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://js.stripe.com https://*.js.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com; connect-src 'self' https://api.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   );
   // camera/microphone allowed for same-origin only -- needed for Interview
   // Practice's recording flow; everything else stays locked down.

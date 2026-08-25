@@ -36,9 +36,16 @@ async function stripeRequest(secretKey: string, path: string, body: Record<strin
 billingRoutes.post("/checkout", async (c) => {
   const configError = requireStripeConfigured(c.env);
   if (configError) return c.json({ error: configError }, 501);
+  if (!c.env.STRIPE_PUBLISHABLE_KEY) return c.json({ error: "billing is not configured yet" }, 501);
 
   const user = c.get("user")!;
   try {
+    // Embedded Checkout: the form renders inside our own page (an iframe),
+    // the visitor never leaves springr.co.uk. Stripe.js on the client uses
+    // clientSecret to mount it; on completion Stripe itself navigates the
+    // whole page to return_url with a real session id substituted in for
+    // "{CHECKOUT_SESSION_ID}" (sent as-is -- Stripe does its own substitution
+    // server-side regardless of how the literal braces get URL-encoded here).
     const session = await stripeRequest(c.env.STRIPE_SECRET_KEY!, "checkout/sessions", {
       mode: "subscription",
       "line_items[0][price]": c.env.STRIPE_PRICE_ID!,
@@ -47,10 +54,10 @@ billingRoutes.post("/checkout", async (c) => {
       // client_reference_id ties the Checkout Session back to our own user id
       // -- the webhook uses this to know who just subscribed.
       client_reference_id: String(user.id),
-      success_url: new URL("/#practice", c.req.url).toString(),
-      cancel_url: new URL("/#practice", c.req.url).toString(),
+      ui_mode: "embedded",
+      return_url: new URL("/?checkout=success&session_id={CHECKOUT_SESSION_ID}", c.req.url).toString(),
     });
-    return c.json({ url: session.url });
+    return c.json({ clientSecret: session.client_secret, publishableKey: c.env.STRIPE_PUBLISHABLE_KEY });
   } catch (err) {
     console.error("Stripe checkout session creation failed", err);
     return c.json({ error: "could not start checkout" }, 502);

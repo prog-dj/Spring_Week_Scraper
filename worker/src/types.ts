@@ -16,6 +16,9 @@ export type Env = {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
+  // Not actually secret (publishable keys are meant to be public/client-side),
+  // stored as a secret anyway just to keep the Stripe config in one place.
+  STRIPE_PUBLISHABLE_KEY?: string;
   ANTHROPIC_API_KEY?: string;
 
   // Optional: Sentry error tracking. Unset locally so wrangler dev doesn't
