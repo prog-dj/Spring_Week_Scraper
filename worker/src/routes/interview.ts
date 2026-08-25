@@ -4,10 +4,12 @@ import { questionsForSector } from "../interview/questions";
 import { computeDeliveryMetrics } from "../interview/metrics";
 import { getLlmFeedback } from "../interview/feedback";
 import { createAttempt } from "../db/interviewAttempts";
+import { checkRateLimit } from "../storage/rateLimit";
 
 export const interviewRoutes = new Hono<HonoEnv>({ strict: false });
 
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024; // audio-only, a couple of minutes of compressed speech comfortably fits
+const DAILY_ATTEMPT_LIMIT = 15; // cheap insurance against scripted abuse -- normal usage never comes close
 
 interviewRoutes.get("/questions", (c) => {
   const sector = c.req.query("sector") || null;
@@ -37,6 +39,19 @@ interviewRoutes.post("/attempts", async (c) => {
     return c.json({ error: "interview feedback is not configured" }, 501);
   }
 
+  const user = c.get("user")!;
+  const { allowed, retryAfterSeconds } = await checkRateLimit(c.env, `interview:${user.id}`, {
+    limit: DAILY_ATTEMPT_LIMIT,
+    windowSeconds: 60 * 60 * 24,
+  });
+  if (!allowed) {
+    return c.json(
+      { error: `you've hit today's limit of ${DAILY_ATTEMPT_LIMIT} practice questions -- try again tomorrow` },
+      429,
+      { "Retry-After": String(retryAfterSeconds ?? 86400) }
+    );
+  }
+
   const contentType = c.req.header("Content-Type") || "";
   if (!contentType.includes("multipart/form-data")) {
     return c.json({ error: "expected multipart/form-data upload" }, 400);
@@ -59,8 +74,6 @@ interviewRoutes.post("/attempts", async (c) => {
   if (audio.size === 0) {
     return c.json({ error: "recording is empty" }, 400);
   }
-
-  const user = c.get("user")!;
 
   try {
     const audioBuffer = await audio.arrayBuffer();
