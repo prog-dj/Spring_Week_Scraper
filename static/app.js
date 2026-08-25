@@ -52,7 +52,7 @@ const showToast = (message) => {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
 };
-const getOpportunity = (id) => opportunityData.find((item) => item.id === id);
+const getOpportunity = (id) => opportunityData.find((item) => item.id === id) || daOpportunityData.find((item) => item.id === id);
 
 // --- Session / auth -------------------------------------------------------
 async function loadSession() {
@@ -160,6 +160,7 @@ async function toggleSaved(opportunityId) {
     }
     renderOverview();
     renderOpportunities();
+    renderDaOpportunities();
     showToast(isSaved ? 'Removed from saved' : 'Opportunity saved');
   } catch (error) {
     showToast('Could not update saved opportunities');
